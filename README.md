@@ -15,6 +15,7 @@
   <a href="#why-ironlog">Why IronLog?</a> •
   <a href="#contributing">Contributing</a> •
   <a href="#license">License</a>
+  <a href="#todo">Credits</a>
 </p>
 
 ---
@@ -61,9 +62,27 @@ IronLog is a high-performance, real-time logging solution for Rust applications.
    }
    ```
 
-4. Start logging!
+4. Open your browser and navigate to `http://127.0.0.1:8000` to view the logs.
 
 ## Usage
 
 IronLog seamlessly integrates with Rust's standard logging facade. Use it just like you would use `log`:
 
+
+## Why IronLog?
+
+IronLog was created to address the common challenge of managing logs across multiple programs in complex systems. It provides a centralized, efficient solution for developers who need to debug and monitor various applications simultaneously, eliminating the need to create custom parsers or juggle multiple logging tools. With IronLog, you can streamline your logging process, enhance your debugging efficiency, and gain valuable insights into your distributed systems with ease.
+
+## Contributing
+
+Contributions are welcome. If you have an improvement or bug fix, please submit a pull request. Ensure your code is well-tested. We'll review and merge contributions that enhance IronLog's functionality or reliability.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Todo
+
+- [ ] tests
+- [ ] a simple cpp client
+- [ ] optional log storage and recovery
