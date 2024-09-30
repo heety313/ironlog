@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/heety313/ironlog"
+description = "A web logger for multi-node system logging"
 
 [lib]
 name = "ironlog"
