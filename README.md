@@ -5,7 +5,7 @@
 <h1 align="center">IronLog</h1>
 
 <p align="center">
-  <strong>Robust, Real-time Logging for Rust Applications</strong>
+  <strong>Robust, Multi-Nodal, Real-time Logging for Any Language</strong>
 </p>
 
 <p align="center">
