@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Log Viewer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <!-- Sidebar -->
+    <div id="sidebar">
+        <h1>Available Hashes</h1>
+        <ul id="hashes"></ul>
+    </div>
+
+    <!-- Main Content -->
+    <div id="main">
+        <div style="display: flex; align-items: center;">
+            <h2 style="margin-right: 10px;">Log Levels</h2>
+            <div class="separator"></div>
+            <div id="levels">
+                <span class="badge INFO selected" data-level="INFO">INFO</span>
+                <span class="badge WARN selected" data-level="WARN">WARN</span>
+                <span class="badge ERROR selected" data-level="ERROR">ERROR</span>
+                <span class="badge DEBUG selected" data-level="DEBUG">DEBUG</span>
+            </div>
+        </div>
+
+        <!-- Dump Logs Button -->
+        <div style="margin-top: 10px;">
+            <button id="dumpButton">Download Visible Logs</button>
+            <button id="copyButton">Copy Visible Logs</button>
+        </div>
+        <!-- Logs Header with Search Bar -->
+        <div id="searchContainer">
+            <h2 style="margin-right: 10px;">Logs</h2>
+            <input type="text" id="searchInput" placeholder="Search logs..." />
+        </div>
+
+        <table id="logs-table">
+            <thead>
+                <tr>
+                    <th class="hash-column">Hash</th>
+                    <th class="timestamp-column">Timestamp</th>
+                    <th class="level-column">Level</th>
+                    <th>Message</th>
+                </tr>
+            </thead>
+            <tbody id="logs"></tbody>
+        </table>
+    </div>
+
+    <script>
+        // JavaScript code remains the same as in the original file
+        const logsElement = document.getElementById('logs');
+        const hashesList = document.getElementById('hashes');
+        const dumpButton = document.getElementById('dumpButton');
+        const searchInput = document.getElementById('searchInput');
+        const copyButton = document.getElementById('copyButton');
+
+        let selectedHashes = new Set();
+        let selectedLevels = new Set(['INFO', 'WARN', 'ERROR', 'DEBUG']);
+        let hashColors = {};
+
+        // Updated function to generate a pastel color
+        function getPastelColor(hashString) {
+    // Simple hash function
+    let hash = 0;
+    for (let i = 0; i < hashString.length; i++) {
+        const char = hashString.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32-bit integer
+    }
+
+    // Use the hash to generate a hue value between 0 and 360
+    const hue = Math.abs(hash % 360);
+
+    // Use the hash to vary saturation and lightness slightly
+    const saturation = 65 + (hash % 20); // varies between 65% and 85%
+    const lightness = 55 + (hash % 15);  // varies between 55% and 70%
+
+    return `hsla(${hue}, ${saturation}%, ${lightness}%, 0.9)`;
+}
+
+
+        // Fetch and display hashes
+        function fetchHashes() {
+            fetch('/api/hashes')
+                .then(response => response.json())
+                .then(hashes => {
+                    hashesList.innerHTML = ''; // Clear existing content
+                    hashes.forEach(hash => {
+                        if (!hashColors[hash]) {
+                            hashColors[hash] = getPastelColor(hash);
+                        }
+
+                        const li = document.createElement('li');
+                        li.innerHTML = `
+                            <span class="hash-badge" style="background-color: ${hashColors[hash]};">&nbsp;</span>
+                            <span class="hash-text">${hash}</span>
+                        `;
+
+                        if (selectedHashes.has(hash)) {
+                            li.classList.add('selected');
+                        }
+
+                        li.onclick = () => {
+                            toggleHashSelection(hash, li);
+                        };
+                        hashesList.appendChild(li);
+                    });
+                });
+        }
+
+        function toggleHashSelection(hash, element) {
+            if (selectedHashes.has(hash)) {
+                selectedHashes.delete(hash);
+                element.classList.remove('selected');
+            } else {
+                selectedHashes.add(hash);
+                element.classList.add('selected');
+            }
+            fetchLogs();
+        }
+
+        // Set up level filters
+        document.querySelectorAll('#levels .badge').forEach(badge => {
+            const level = badge.getAttribute('data-level');
+
+            badge.onclick = () => {
+                if (selectedLevels.has(level)) {
+                    selectedLevels.delete(level);
+                    badge.classList.remove('selected');
+                } else {
+                    selectedLevels.add(level);
+                    badge.classList.add('selected');
+                }
+                fetchLogs();
+            };
+        });
+
+        function fetchLogs() {
+            if (selectedHashes.size === 0) {
+                logsElement.innerHTML = '<tr><td colspan="4">No hashes selected.</td></tr>';
+                return;
+            }
+            const promises = [];
+            selectedHashes.forEach(hash => {
+                const promise = fetch(`/api/logs/${hash}`)
+                    .then(response => response.json())
+                    .then(logs => logs);
+                promises.push(promise);
+            });
+
+            Promise.all(promises).then(results => {
+                logsElement.innerHTML = '';
+                const allLogs = results.flat();
+
+                const searchQuery = searchInput.value.toLowerCase();
+
+                const filteredLogs = allLogs.filter(log =>
+                    (selectedLevels.size === 0 || selectedLevels.has(log.level)) &&
+                    (!searchQuery || log.message.toLowerCase().includes(searchQuery))
+                );
+
+                filteredLogs.forEach(log => {
+                    const row = document.createElement('tr');
+
+                    const date = new Date(log.timestamp);
+                    const formattedTimestamp = date.toLocaleString(undefined, {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: false
+                    });
+
+                    row.innerHTML = `
+                        <td class="hash-column">
+                            <span class="hash-badge-table" style="background-color: ${hashColors[log.hash]};">${log.hash}</span>
+                        </td>
+                        <td class="timestamp-column">${formattedTimestamp}</td>
+                        <td class="level-column">
+                            <span class="level-label ${log.level}">${log.level}</span>
+                        </td>
+                        <td>${log.message}</td>
+                    `;
+                    logsElement.appendChild(row);
+                });
+            });
+        }
+
+        // Copy visible logs to clipboard
+        copyButton.onclick = () => {
+            const rows = logsElement.querySelectorAll('tr');
+            if (rows.length === 0) {
+                alert('No logs to copy.');
+                return;
+            }
+
+            let clipboardContent = 'Hash\tLevel\tTimestamp\tMessage\n';
+
+            rows.forEach(row => {
+                const cols = row.querySelectorAll('td');
+                const data = [];
+                cols.forEach(col => {
+                    data.push(col.textContent.trim());
+                });
+                clipboardContent += data.join('\t') + '\n';
+            });
+
+            navigator.clipboard.writeText(clipboardContent).then(() => {
+                alert('Logs copied to clipboard.');
+            }, () => {
+                alert('Failed to copy logs to clipboard.');
+            });
+        };
+
+        // Dump visible logs to a file
+        dumpButton.onclick = () => {
+            const rows = logsElement.querySelectorAll('tr');
+            if (rows.length === 0) {
+                alert('No logs to download.');
+                return;
+            }
+
+            let csvContent = 'Hash,Level,Message\n';
+
+            rows.forEach(row => {
+                const cols = row.querySelectorAll('td');
+                const data = [];
+                cols.forEach(col => data.push('"' + col.innerText.replace(/"/g, '""') + '"'));
+                csvContent += data.join(',') + '\n';
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'logs.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        // Handle search input
+        searchInput.addEventListener('input', () => {
+            fetchLogs();
+        });
+
+        // Initial fetch of hashes
+        fetchHashes();
+
+        // Refresh hashes every 5 seconds
+        setInterval(fetchHashes, 1000);
+
+        // Refresh logs every 5 seconds
+        setInterval(fetchLogs, 1000);
+    </script>
+</body>
+
+</html>

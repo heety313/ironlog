@@ -1,0 +1,317 @@
+/* General Styles */
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+}
+
+body {
+    display: flex;
+    flex-direction: row;
+    background-color: #f5f5f5;
+}
+
+/* Sidebar Styles */
+#sidebar {
+    width: 220px;
+    background-color: #ffffff;
+    border-right: 1px solid #ccc;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+#sidebar h1 {
+    padding: 8px;
+    margin: 0;
+    background-color: #586066;
+    color: white;
+    font-size: 18px;
+}
+
+#hashes {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#hashes li {
+    padding: 3px 10px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: all 0.3s ease;
+    min-height: 30px;
+}
+
+#hashes li:hover {
+    background-color: #f0f0f0;
+}
+
+#hashes li.selected {
+    background-color: #e0e0e0;
+    font-weight: bold;
+}
+
+#hashes li .hash-badge {
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+}
+
+#hashes li.selected .hash-badge {
+    width: 14px;
+    height: 14px;
+}
+
+#hashes li .hash-text {
+    margin-left: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-grow: 1;
+    min-width: 0;
+    font-size: 12px;
+}
+
+/* Main Content Styles */
+#main {
+    flex-grow: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Log Levels Container */
+#main > div:first-of-type {
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+#main > div:first-of-type h2 {
+    margin: 0 10px 0 0;
+    font-size: 18px;
+}
+
+/* Separator Line */
+.separator {
+    display: inline-block;
+    border-left: 1px solid #ccc;
+    height: 20px;
+    margin: 0 10px;
+    vertical-align: middle;
+}
+
+/* Log Level Badges Container */
+#levels {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+/* Log Level Badges */
+.badge {
+    display: inline-block;
+    padding: 3px 8px;
+    margin: 0;
+    background-color: #007BFF;
+    color: #333;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 12px;
+    user-select: none;
+}
+
+.badge.selected {
+    filter: none;
+}
+
+.badge:not(.selected) {
+    filter: grayscale(70%) brightness(80%);
+}
+
+.badge.INFO {
+    background-color: #77dd77;
+}
+
+.badge.WARN {
+    background-color: #ffb347;
+}
+
+.badge.ERROR {
+    background-color: #ff6961;
+}
+
+.badge.DEBUG {
+    background-color: #aec6cf;
+}
+
+/* Logs Table Styles */
+table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    margin-top: 15px;
+    background-color: #ffffff;
+}
+
+th, td {
+    padding: 5px 10px;
+    border-bottom: 1px solid #ccc;
+    text-align: left;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+th {
+    background-color: #f0f0f0;
+}
+
+tr:hover {
+    background-color: #f9f9f9;
+}
+
+/* Adjust Column Sizes */
+th.hash-column,
+td.hash-column {
+    width: 15%;
+}
+
+th.timestamp-column,
+td.timestamp-column {
+    width: 15%;
+}
+
+th.level-column,
+td.level-column {
+    width: 10%;
+}
+
+th:last-child,
+td:last-child {
+    width: 60%;
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+/* Log Level Colors */
+.level-label {
+    display: inline-block;
+    padding: 3px 5px;
+    border-radius: 3px;
+    color: #333;
+    font-weight: bold;
+}
+
+.level-label.INFO {
+    background-color: #77dd77;
+}
+
+.level-label.WARN {
+    background-color: #ffb347;
+}
+
+.level-label.ERROR {
+    background-color: #ff6961;
+}
+
+.level-label.DEBUG {
+    background-color: #aec6cf;
+}
+
+/* Search Bar Styles */
+#searchContainer {
+    display: flex;
+    align-items: center;
+    margin-top: 20px;
+}
+
+#searchInput {
+    flex-grow: 1;
+    padding: 5px 10px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-left: 10px;
+}
+
+/* Hash Badge Styles */
+.hash-badge-table {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: #333;
+    font-weight: bold;
+    font-size: 11px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Dump Logs Button */
+#dumpButton, #copyButton {
+    padding: 5px 10px;
+    font-size: 14px;
+    background-color: #f0f0f0;
+    color: #333;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-right: 10px;
+    transition: background-color 0.3s ease;
+}
+
+#dumpButton:hover, #copyButton:hover {
+    background-color: #e0e0e0;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    body {
+        flex-direction: column;
+    }
+    #sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid #ccc;
+    }
+    #main {
+        padding: 10px;
+    }
+    th, td {
+        padding: 5px 8px;
+        font-size: 11px;
+    }
+    .badge {
+        padding: 4px 8px;
+        font-size: 12px;
+    }
+    #searchInput {
+        margin-left: 5px;
+    }
+    #main > div:first-of-type {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    #main > div:first-of-type h2 {
+        margin-bottom: 5px;
+    }
+    .separator {
+        display: none;
+    }
+    #levels {
+        margin-top: 5px;
+    }
+}
