@@ -1,4 +1,4 @@
-use log::{Level, Metadata, Record};
+use log::{Metadata, Record};
 use serde::Serialize;
 use std::io::Write;
 use std::net::TcpStream;

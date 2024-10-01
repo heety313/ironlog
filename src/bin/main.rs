@@ -2,96 +2,224 @@
 
 use rocket::http::ContentType;
 use include_dir::{include_dir, Dir};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use rocket::serde::json::Json;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Mutex;
 use tokio::net::TcpListener;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use once_cell::sync::Lazy;
+use sqlx::{SqlitePool, sqlite::SqlitePoolOptions, Row};
+use std::fs;
+use rocket::form::FromForm;
 
-static LOG_STORAGE: Lazy<Mutex<HashMap<String, Vec<LogMessage>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-
-// Embedding the static files
 static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/static");
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, sqlx::FromRow)]
 struct LogMessage {
     level: String,
     message: String,
     target: String,
     module_path: Option<String>,
     file: Option<String>,
-    line: Option<u32>,
+    line: Option<i64>, // SQLite INTEGER maps to i64
     hash: String,
     timestamp: String,
 }
 
-// TCP Listener Task
 #[rocket::main]
 async fn main() {
+    // Database file path
+    let db_path = "logs.db";
+
+    // Check if the database file exists
+    if !Path::new(db_path).exists() {
+        // Create the database file by establishing a connection
+        fs::File::create(db_path).expect("Failed to create database file.");
+    }
+
+    // Initialize the database connection pool
+    let db_url = format!("sqlite://{}", db_path);
+    let db_pool = SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect(&db_url)
+        .await
+        .expect("Failed to create pool.");
+
+    // Ensure the logs table exists
+    sqlx::query("
+        CREATE TABLE IF NOT EXISTS logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            level TEXT,
+            message TEXT,
+            target TEXT,
+            module_path TEXT,
+            file TEXT,
+            line INTEGER,
+            hash TEXT,
+            timestamp TEXT
+        )
+    ")
+    .execute(&db_pool)
+    .await
+    .expect("Failed to create logs table.");
+
     // Start TCP listener in a separate task
+    let db_pool_clone = db_pool.clone();
     tokio::spawn(async move {
         let listener = TcpListener::bind("127.0.0.1:5000").await.unwrap();
         println!("Log server is running on 127.0.0.1:5000");
 
         loop {
             let (socket, _) = listener.accept().await.unwrap();
-            tokio::spawn(handle_client(socket));
+            let db_pool = db_pool_clone.clone();
+            tokio::spawn(handle_client(socket, db_pool));
         }
     });
 
     // Launch the Rocket server
     rocket::build()
-        .mount("/api", routes![get_hashes, get_logs, list_files])
-        .mount("/", routes![index, serve_file])  // Serve static files from root, including index.html
+        .manage(db_pool)
+        .mount(
+            "/api",
+            routes![
+                get_hashes,
+                get_logs,
+                list_files,
+                get_time_range,
+                get_time_range_all, // Add this line
+            ],
+        )
+        .mount("/", routes![index, serve_file])
         .launch()
         .await.unwrap();
 }
 
-async fn handle_client(socket: tokio::net::TcpStream) {
+async fn handle_client(socket: tokio::net::TcpStream, db_pool: SqlitePool) {
     let reader = BufReader::new(socket);
     let mut lines = reader.lines();
 
     while let Ok(Some(line)) = lines.next_line().await {
         if let Ok(log_message) = serde_json::from_str::<LogMessage>(&line) {
-            let mut storage = LOG_STORAGE.lock().unwrap();
-            storage.entry(log_message.hash.clone())
-                .or_insert_with(Vec::new)
-                .push(log_message);
+            // Insert the log_message into the database
+            sqlx::query("
+                INSERT INTO logs (level, message, target, module_path, file, line, hash, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ")
+            .bind(&log_message.level)
+            .bind(&log_message.message)
+            .bind(&log_message.target)
+            .bind(&log_message.module_path)
+            .bind(&log_message.file)
+            .bind(log_message.line)
+            .bind(&log_message.hash)
+            .bind(&log_message.timestamp)
+            .execute(&db_pool)
+            .await
+            .expect("Failed to insert log into database.");
         }
     }
 }
 
-// Serve the index.html file when querying the root
 #[get("/")]
 fn index() -> Option<(ContentType, Vec<u8>)> {
-    // Get the index.html file from the embedded directory
     let file = STATIC_DIR.get_file("index.html")?;
 
-    // Guess the MIME type based on the file extension (in this case, it's HTML)
     let content_type = ContentType::from_extension(file.path().extension()?.to_str()?)
         .unwrap_or(ContentType::HTML);
 
-    // Return the file contents with the appropriate content type
     Some((content_type, file.contents().to_vec()))
 }
 
-// HTTP Endpoints
 #[get("/hashes")]
-fn get_hashes() -> Json<Vec<String>> {
-    let storage = LOG_STORAGE.lock().unwrap();
-    Json(storage.keys().cloned().collect())
+async fn get_hashes(db_pool: &rocket::State<SqlitePool>) -> Json<Vec<String>> {
+    let rows = sqlx::query("SELECT DISTINCT hash FROM logs")
+        .fetch_all(db_pool.inner())
+        .await
+        .expect("Failed to fetch hashes.");
+
+    let hashes = rows.into_iter()
+        .map(|row| row.get::<String, _>("hash"))
+        .collect();
+
+    Json(hashes)
 }
 
-#[get("/logs/<hash>")]
-fn get_logs(hash: &str) -> Option<Json<Vec<LogMessage>>> {
-    let storage = LOG_STORAGE.lock().unwrap();
-    storage.get(hash).cloned().map(Json)
+
+#[derive(FromForm)]
+struct LogQuery {
+    count: Option<i64>,
+    start: Option<String>,
+    end: Option<String>,
 }
 
-// Route for listing files (for debugging purposes)
+#[get("/logs/<hash>?<q..>")]
+async fn get_logs(
+    hash: &str,
+    q: Option<LogQuery>,
+    db_pool: &rocket::State<SqlitePool>,
+) -> Option<Json<Vec<LogMessage>>> {
+    use sqlx::QueryBuilder;
+
+    // Initialize the QueryBuilder
+    let mut builder = QueryBuilder::<sqlx::Sqlite>::new("
+        SELECT
+            level,
+            message,
+            target,
+            module_path,
+            file,
+            line,
+            hash,
+            timestamp
+        FROM logs
+        WHERE hash = ");
+    builder.push_bind(hash);
+
+    // Variables to store cloned values
+    let mut start = None;
+    let mut end = None;
+    let mut count = None;
+
+    if let Some(ref query_params) = q {
+        // Clone start and end to ensure they live long enough
+        if let Some(ref s) = query_params.start {
+            start = Some(s.clone());
+        }
+        if let Some(ref e) = query_params.end {
+            end = Some(e.clone());
+        }
+        // `count` is Copy, so no need to clone
+        count = query_params.count;
+    }
+
+    // Add conditions based on `start` and `end`
+    if let Some(s) = start {
+        builder.push(" AND timestamp >= ");
+        builder.push_bind(s);
+    }
+    if let Some(e) = end {
+        builder.push(" AND timestamp <= ");
+        builder.push_bind(e);
+    }
+
+    builder.push(" ORDER BY timestamp DESC");
+
+    // Add LIMIT if `count` is provided
+    if let Some(c) = count {
+        builder.push(" LIMIT ");
+        builder.push_bind(c);
+    }
+
+    // Build and execute the query
+    let query = builder.build_query_as::<LogMessage>();
+
+    let logs = query
+        .fetch_all(db_pool.inner())
+        .await
+        .ok()?;
+
+    Some(Json(logs))
+}
+
 #[get("/list_files")]
 fn list_files() -> String {
     let files: Vec<_> = STATIC_DIR.files()
@@ -100,16 +228,56 @@ fn list_files() -> String {
     format!("Files in static dir: {:?}", files)
 }
 
-// Route for serving embedded static files
 #[get("/<file..>")]
 fn serve_file(file: PathBuf) -> Option<(ContentType, Vec<u8>)> {
-    // Try to get the file from the embedded directory
     let file = STATIC_DIR.get_file(file.to_str()?)?;
 
-    // Guess the MIME type based on the file extension
     let content_type = ContentType::from_extension(file.path().extension()?.to_str()?)
         .unwrap_or(ContentType::Bytes);
 
-    // Return the file contents with the appropriate content type
     Some((content_type, file.contents().to_vec()))
+}
+
+#[derive(Serialize, Deserialize)]
+struct TimeRange {
+    min_timestamp: Option<String>,
+    max_timestamp: Option<String>,
+}
+
+#[get("/logs/<hash>/timerange")]
+async fn get_time_range(
+    hash: &str,
+    db_pool: &rocket::State<SqlitePool>,
+) -> Option<Json<TimeRange>> {
+    let row = sqlx::query!(
+        "SELECT MIN(timestamp) as min_timestamp, MAX(timestamp) as max_timestamp FROM logs WHERE hash = ?",
+        hash
+    )
+    .fetch_one(db_pool.inner())
+    .await
+    .ok()?;
+
+    let time_range = TimeRange {
+        min_timestamp: row.min_timestamp,
+        max_timestamp: row.max_timestamp,
+    };
+
+    Some(Json(time_range))
+}
+
+#[get("/logs/timerange")]
+async fn get_time_range_all(db_pool: &rocket::State<SqlitePool>) -> Option<Json<TimeRange>> {
+    let row = sqlx::query!(
+        "SELECT MIN(timestamp) as min_timestamp, MAX(timestamp) as max_timestamp FROM logs"
+    )
+    .fetch_one(db_pool.inner())
+    .await
+    .ok()?;
+
+    let time_range = TimeRange {
+        min_timestamp: row.min_timestamp,
+        max_timestamp: row.max_timestamp,
+    };
+
+    Some(Json(time_range))
 }

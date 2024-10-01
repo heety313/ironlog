@@ -28,9 +28,11 @@
         </div>
 
         <!-- Dump Logs Button -->
-        <div style="margin-top: 10px;">
+        <div style="margin-top: 10px; display: flex; align-items: center;">
             <button id="dumpButton">Download Visible Logs</button>
             <button id="copyButton">Copy Visible Logs</button>
+            <label for="logCountInput" style="margin-left: 10px;">Logs to fetch:</label>
+            <input type="number" id="logCountInput" value="100" min="1" style="width: 60px; margin-left: 5px;">
         </div>
         <!-- Logs Header with Search Bar -->
         <div id="searchContainer">
@@ -65,23 +67,23 @@
 
         // Updated function to generate a pastel color
         function getPastelColor(hashString) {
-    // Simple hash function
-    let hash = 0;
-    for (let i = 0; i < hashString.length; i++) {
-        const char = hashString.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash; // Convert to 32-bit integer
-    }
+            // Simple hash function
+            let hash = 0;
+            for (let i = 0; i < hashString.length; i++) {
+                const char = hashString.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Convert to 32-bit integer
+            }
 
-    // Use the hash to generate a hue value between 0 and 360
-    const hue = Math.abs(hash % 360);
+            // Use the hash to generate a hue value between 0 and 360
+            const hue = Math.abs(hash % 360);
 
-    // Use the hash to vary saturation and lightness slightly
-    const saturation = 65 + (hash % 20); // varies between 65% and 85%
-    const lightness = 55 + (hash % 15);  // varies between 55% and 70%
+            // Use the hash to vary saturation and lightness slightly
+            const saturation = 65 + (hash % 20); // varies between 65% and 85%
+            const lightness = 55 + (hash % 15);  // varies between 55% and 70%
 
-    return `hsla(${hue}, ${saturation}%, ${lightness}%, 0.9)`;
-}
+            return `hsla(${hue}, ${saturation}%, ${lightness}%, 0.9)`;
+        }
 
 
         // Fetch and display hashes
@@ -145,9 +147,13 @@
                 logsElement.innerHTML = '<tr><td colspan="4">No hashes selected.</td></tr>';
                 return;
             }
+
+            // Get the log count from the input field
+            const logCount = parseInt(document.getElementById('logCountInput').value) || 100;
+
             const promises = [];
             selectedHashes.forEach(hash => {
-                const promise = fetch(`/api/logs/${hash}`)
+                const promise = fetch(`/api/logs/${hash}?count=${logCount}`)
                     .then(response => response.json())
                     .then(logs => logs);
                 promises.push(promise);
@@ -179,15 +185,15 @@
                     });
 
                     row.innerHTML = `
-                        <td class="hash-column">
-                            <span class="hash-badge-table" style="background-color: ${hashColors[log.hash]};">${log.hash}</span>
-                        </td>
-                        <td class="timestamp-column">${formattedTimestamp}</td>
-                        <td class="level-column">
-                            <span class="level-label ${log.level}">${log.level}</span>
-                        </td>
-                        <td>${log.message}</td>
-                    `;
+                <td class="hash-column">
+                    <span class="hash-badge-table" style="background-color: ${hashColors[log.hash]};">${log.hash}</span>
+                </td>
+                <td class="timestamp-column">${formattedTimestamp}</td>
+                <td class="level-column">
+                    <span class="level-label ${log.level}">${log.level}</span>
+                </td>
+                <td>${log.message}</td>
+            `;
                     logsElement.appendChild(row);
                 });
             });
