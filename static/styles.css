@@ -315,3 +315,17 @@ td:last-child {
         margin-top: 5px;
     }
 }
+
+/* Time Range Slider Styles */
+#timeRangeContainer {
+    margin-top: 20px;
+}
+
+#timeRangeSlider {
+    margin: 10px 0;
+}
+
+#timeRangeLabels {
+    font-size: 12px;
+    color: #555;
+}

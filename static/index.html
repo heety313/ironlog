@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 
+
 <head>
     <meta charset="UTF-8">
     <title>Log Viewer</title>
@@ -64,6 +65,8 @@
         let selectedHashes = new Set();
         let selectedLevels = new Set(['INFO', 'WARN', 'ERROR', 'DEBUG']);
         let hashColors = {};
+        let minTimestamp, maxTimestamp;
+        let slider; // Declare slider variable globally
 
         // Updated function to generate a pastel color
         function getPastelColor(hashString) {
@@ -114,6 +117,7 @@
                     });
                 });
         }
+
 
         function toggleHashSelection(hash, element) {
             if (selectedHashes.has(hash)) {
@@ -263,10 +267,10 @@
         fetchHashes();
 
         // Refresh hashes every 5 seconds
-        setInterval(fetchHashes, 1000);
+        setInterval(fetchHashes, 3000);
 
-        // Refresh logs every 5 seconds
         setInterval(fetchLogs, 1000);
+
     </script>
 </body>
 
