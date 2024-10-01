@@ -30,6 +30,7 @@ IronLog is a high-performance, real-time logging solution for Rust applications.
 - 📊 **Web Interface**: Built-in web UI for log viewing and analysis.
 - 🔧 **Easy Integration**: Simple setup with minimal code.
 - 🔄 **Asynchronous**: Non-blocking logging operations for optimal performance.
+- 💾 **Persistent Storage**: Store logs in a database for long-term retention and analysis.
 
 <p align="center">
   <img src="doc/img/screenshot.png" alt="IronLog Web Interface" width="80%"/>
@@ -85,4 +86,4 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 - [ ] tests
 - [ ] a simple cpp client
-- [ ] optional log storage and recovery
+- [x] optional log storage and recovery
