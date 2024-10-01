@@ -84,8 +84,6 @@ async fn main() {
                 get_hashes,
                 get_logs,
                 list_files,
-                get_time_range,
-                get_time_range_all, // Add this line
             ],
         )
         .mount("/", routes![index, serve_file])
@@ -236,48 +234,4 @@ fn serve_file(file: PathBuf) -> Option<(ContentType, Vec<u8>)> {
         .unwrap_or(ContentType::Bytes);
 
     Some((content_type, file.contents().to_vec()))
-}
-
-#[derive(Serialize, Deserialize)]
-struct TimeRange {
-    min_timestamp: Option<String>,
-    max_timestamp: Option<String>,
-}
-
-#[get("/logs/<hash>/timerange")]
-async fn get_time_range(
-    hash: &str,
-    db_pool: &rocket::State<SqlitePool>,
-) -> Option<Json<TimeRange>> {
-    let row = sqlx::query!(
-        "SELECT MIN(timestamp) as min_timestamp, MAX(timestamp) as max_timestamp FROM logs WHERE hash = ?",
-        hash
-    )
-    .fetch_one(db_pool.inner())
-    .await
-    .ok()?;
-
-    let time_range = TimeRange {
-        min_timestamp: row.min_timestamp,
-        max_timestamp: row.max_timestamp,
-    };
-
-    Some(Json(time_range))
-}
-
-#[get("/logs/timerange")]
-async fn get_time_range_all(db_pool: &rocket::State<SqlitePool>) -> Option<Json<TimeRange>> {
-    let row = sqlx::query!(
-        "SELECT MIN(timestamp) as min_timestamp, MAX(timestamp) as max_timestamp FROM logs"
-    )
-    .fetch_one(db_pool.inner())
-    .await
-    .ok()?;
-
-    let time_range = TimeRange {
-        min_timestamp: row.min_timestamp,
-        max_timestamp: row.max_timestamp,
-    };
-
-    Some(Json(time_range))
 }
