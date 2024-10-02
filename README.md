@@ -14,7 +14,7 @@
   <a href="#usage">Usage</a> •
   <a href="#why-ironlog">Why IronLog?</a> •
   <a href="#contributing">Contributing</a> •
-  <a href="#license">License</a>
+  <a href="#license">License</a> •
   <a href="#todo">Credits</a>
 </p>
 
