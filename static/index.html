@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 
-
 <head>
     <meta charset="UTF-8">
     <title>Log Viewer</title>
@@ -9,6 +8,15 @@
 </head>
 
 <body>
+    <!-- Dark Mode Toggle Switch -->
+    <div id="darkModeToggle">
+        <label class="dark-mode-label">
+            <input type="checkbox" id="darkModeCheckbox">
+            <span class="slider"></span>
+            <span class="label-text">Dark Mode</span>
+        </label>
+    </div>
+
     <!-- Sidebar -->
     <div id="sidebar">
         <h1>Available Hashes</h1>
@@ -261,6 +269,25 @@
         // Handle search input
         searchInput.addEventListener('input', () => {
             fetchLogs();
+        });
+
+        const darkModeCheckbox = document.getElementById('darkModeCheckbox');
+        const bodyElement = document.body;
+
+        // Load dark mode preference from localStorage
+        if (localStorage.getItem('darkMode') === 'enabled') {
+            bodyElement.classList.add('dark-mode');
+            darkModeCheckbox.checked = true;
+        }
+
+        darkModeCheckbox.addEventListener('change', () => {
+            if (darkModeCheckbox.checked) {
+                bodyElement.classList.add('dark-mode');
+                localStorage.setItem('darkMode', 'enabled');
+            } else {
+                bodyElement.classList.remove('dark-mode');
+                localStorage.setItem('darkMode', 'disabled');
+            }
         });
 
         // Initial fetch of hashes
