@@ -10,6 +10,8 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use sqlx::{SqlitePool, sqlite::SqlitePoolOptions, Row};
 use std::fs;
 use rocket::form::FromForm;
+use chrono::Utc;
+
 
 static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/static");
 
@@ -22,7 +24,12 @@ struct LogMessage {
     file: Option<String>,
     line: Option<i64>, // SQLite INTEGER maps to i64
     hash: String,
+    #[serde(default = "default_timestamp")]
     timestamp: String,
+}
+
+fn default_timestamp() -> String {
+    Utc::now().to_rfc3339()
 }
 
 #[rocket::main]
@@ -65,7 +72,7 @@ async fn main() {
     // Start TCP listener in a separate task
     let db_pool_clone = db_pool.clone();
     tokio::spawn(async move {
-        let listener = TcpListener::bind("127.0.0.1:5000").await.unwrap();
+        let listener = TcpListener::bind("0.0.0.0:5000").await.unwrap();
         println!("Log server is running on 127.0.0.1:5000");
 
         loop {

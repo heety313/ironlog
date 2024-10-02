@@ -1,7 +1,7 @@
 use ironlog;
 
 fn main() {
-    ironlog::TcpLogger::init("127.0.0.1:5000", "A python script", log::LevelFilter::Debug).unwrap();
+    ironlog::TcpLogger::init("127.0.0.1:5000", "cpp you know me", log::LevelFilter::Debug).unwrap();
 
     log::info!("Application started");
     log::warn!("This is a warning");
