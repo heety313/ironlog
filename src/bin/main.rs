@@ -72,7 +72,7 @@ async fn main() {
     // Start TCP listener in a separate task
     let db_pool_clone = db_pool.clone();
     tokio::spawn(async move {
-        let listener = TcpListener::bind("0.0.0.0:5000").await.unwrap();
+        let listener = TcpListener::bind("127.0.0.1:5000").await.unwrap();
         println!("Log server is running on 127.0.0.1:5000");
 
         loop {
