@@ -36,12 +36,23 @@
             </div>
         </div>
 
+        <div id="timeRangeSelector">
+            <h3>Select Time Range</h3>
+            <div id="slider-range"></div>
+            <div id="timeInputs">
+                <label for="startTime">Start Time:</label>
+                <input type="datetime-local" id="startTime" name="startTime">
+                <label for="endTime">End Time:</label>
+                <input type="datetime-local" id="endTime" name="endTime">
+            </div>
+        </div>
+
         <!-- Dump Logs Button -->
         <div style="margin-top: 10px; display: flex; align-items: center;">
             <button id="dumpButton">Download Visible Logs</button>
             <button id="copyButton">Copy Visible Logs</button>
             <label for="logCountInput" style="margin-left: 10px;">Logs to fetch:</label>
-            <input type="number" id="logCountInput" value="100" min="1" style="width: 60px; margin-left: 5px;">
+            <input type="number" id="logCountInput" value="100" min="1">
         </div>
         <!-- Logs Header with Search Bar -->
         <div id="searchContainer">
@@ -62,6 +73,136 @@
         </table>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+
+    <script>
+        // Fetches the date range for the logs
+        async function fetchDateRange() {
+            try {
+                const response = await fetch('/api/date_range');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+
+                if (!data.min_date || !data.max_date) {
+                    throw new Error('Server returned invalid date range');
+                }
+
+                const minDate = new Date(data.min_date);
+                const maxDate = new Date(data.max_date);
+
+                if (isNaN(minDate.getTime()) || isNaN(maxDate.getTime())) {
+                    throw new Error('Invalid date parsed from server data');
+                }
+
+                return { minDate, maxDate };
+            } catch (error) {
+                console.error('Error in fetchDateRange:', error);
+                // Fallback to a default range if fetch fails
+                const fallbackMinDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
+                const fallbackMaxDate = new Date();
+                console.log('Using fallback date range:', { fallbackMinDate, fallbackMaxDate });
+                return {
+                    minDate: fallbackMinDate,
+                    maxDate: fallbackMaxDate
+                };
+            }
+        }
+
+        // Updates the logs based on the selected time range and other filters
+        async function updateLogs() {
+            const startTime = $("#startTime").val();
+            const endTime = $("#endTime").val();
+            const selectedHash = $("#hashes .selected").data("hash");
+            const selectedLevels = $(".badge.selected").map(function() {
+                return $(this).attr("level");
+            }).get();
+
+            try {
+                const response = await fetch(`/api/logs/${selectedHash}?start=${startTime}&end=${endTime}`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch logs');
+                }
+                const logs = await response.json();
+
+                // Filter logs by selected levels
+                const filteredLogs = logs.filter(log => selectedLevels.includes(log.level));
+
+                // Clear existing logs
+                $("#logTableBody").empty();
+
+                // Populate table with new logs
+                filteredLogs.forEach(log => {
+                    const row = `
+                        <tr>
+                            <td class="hash-column"><span class="hash-badge-table">${log.hash}</span></td>
+                            <td class="timestamp-column">${new Date(log.timestamp).toLocaleString()}</td>
+                            <td class="level-column"><span class="level-label ${log.level}">${log.level}</span></td>
+                            <td>${log.message}</td>
+                        </tr>
+                    `;
+                    $("#logTableBody").append(row);
+                });
+            } catch (error) {
+                console.error('Error updating logs:', error);
+                $("#logTableBody").html('<tr><td colspan="4">Failed to load logs. Please try again.</td></tr>');
+            }
+        }
+
+        // Initialize the date range picker
+        $(async function() {
+            try {
+                const { minDate, maxDate } = await fetchDateRange();
+                console.log('Date range for slider:', { minDate, maxDate });
+
+                function formatDateTime(date) {
+                    return date.toISOString().slice(0, 16);
+                }
+
+                function updateTimeInputs(start, end) {
+                    $("#startTime").val(formatDateTime(new Date(start)));
+                    $("#endTime").val(formatDateTime(new Date(end)));
+                }
+
+                $("#slider-range").slider({
+                    range: true,
+                    min: minDate.getTime(),
+                    max: maxDate.getTime(),
+                    step: 3600000, // 1 hour in milliseconds
+                    values: [minDate.getTime(), maxDate.getTime()],
+                    slide: function(event, ui) {
+                        updateTimeInputs(ui.values[0], ui.values[1]);
+                        updateLogs();
+                    }
+                });
+
+                // Initialize date inputs
+                updateTimeInputs(minDate.getTime(), maxDate.getTime());
+
+                // Add event listeners for manual input changes
+                $("#startTime, #endTime").on("change", function() {
+                    const startTime = new Date($("#startTime").val()).getTime();
+                    const endTime = new Date($("#endTime").val()).getTime();
+
+                    if (!isNaN(startTime) && !isNaN(endTime)) {
+                        $("#slider-range").slider("values", [startTime, endTime]);
+                        updateLogs();
+                    }
+                });
+
+                // Initial log update
+                updateLogs();
+
+                console.log('Hourly slider initialized');
+            } catch (error) {
+                console.error('Error initializing date range:', error);
+            }
+        });
+
+    </script>
     <script>
         // JavaScript code remains the same as in the original file
         const logsElement = document.getElementById('logs');
