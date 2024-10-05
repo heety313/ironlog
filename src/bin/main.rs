@@ -10,7 +10,7 @@ use tokio::net::TcpListener;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use sqlx::{SqlitePool, sqlite::SqlitePoolOptions, Row};
 use std::fs;
-use chrono::{DateTime, Utc, Duration};
+use chrono::{Utc, Duration};
 
 
 static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/static");
@@ -195,6 +195,7 @@ async fn get_logs(
 ) -> Option<Json<Vec<LogMessage>>> {
     use sqlx::QueryBuilder;
 
+    // Initialize the QueryBuilder
     let mut builder = QueryBuilder::<sqlx::Sqlite>::new("
         SELECT
             level,
@@ -209,27 +210,30 @@ async fn get_logs(
         WHERE hash = ");
     builder.push_bind(hash);
 
+    let mut count = None;
+
     if let Some(ref query_params) = q {
-        if let Some(ref start) = query_params.start {
-            if let Ok(start_time) = DateTime::parse_from_rfc3339(start) {
-                builder.push(" AND timestamp >= ");
-                builder.push_bind(start_time.to_rfc3339());
-            }
+        if let Some(ref s) = query_params.start {
+            builder.push(" AND strftime('%s', timestamp) >= ");
+            builder.push_bind(s);
         }
-        if let Some(ref end) = query_params.end {
-            if let Ok(end_time) = DateTime::parse_from_rfc3339(end) {
-                builder.push(" AND timestamp <= ");
-                builder.push_bind(end_time.to_rfc3339());
-            }
+        if let Some(ref e) = query_params.end {
+            builder.push(" AND strftime('%s', timestamp) <= ");
+            builder.push_bind(e);
         }
-        if let Some(count) = query_params.count {
-            builder.push(" LIMIT ");
-            builder.push_bind(count);
-        }
+        // `count` is Copy, so no need to clone
+        count = query_params.count;
     }
 
     builder.push(" ORDER BY timestamp DESC");
 
+    // Add LIMIT if `count` is provided
+    if let Some(c) = count {
+        builder.push(" LIMIT ");
+        builder.push_bind(c);
+    }
+
+    // Build and execute the query
     let query = builder.build_query_as::<LogMessage>();
 
     let logs = query
