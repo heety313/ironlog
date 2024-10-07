@@ -1,4 +1,8 @@
-#[macro_use] extern crate rocket;
+#[macro_use]
+extern crate rocket;
+
+mod config;
+use config::Config;
 
 use rocket::http::ContentType;
 use rocket::form::FromForm;
@@ -11,7 +15,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use sqlx::{SqlitePool, sqlite::SqlitePoolOptions, Row};
 use std::fs;
 use chrono::{Utc, Duration};
-
+use clap::Parser;
 
 static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/static");
 
@@ -34,8 +38,10 @@ fn default_timestamp() -> String {
 
 #[rocket::main]
 async fn main() {
+    let config = Config::parse();
+
     // Database file path
-    let db_path = "logs.db";
+    let db_path = &config.log_db;
 
     // Check if the database file exists
     if !Path::new(db_path).exists() {
@@ -71,19 +77,27 @@ async fn main() {
 
     // Start TCP listener in a separate task
     let db_pool_clone = db_pool.clone();
+    let config_clone = config.clone();
     tokio::spawn(async move {
-        let listener = TcpListener::bind("127.0.0.1:5000").await.unwrap();
-        println!("Log server is running on 127.0.0.1:5000");
+        let listener_addr = format!("{}:{}", config_clone.tcp_listener_ip, config_clone.tcp_listener_port);
+        let listener = TcpListener::bind(&listener_addr).await.unwrap();
+        println!("Log server is running on {}", listener_addr);
 
         loop {
             let (socket, _) = listener.accept().await.unwrap();
             let db_pool = db_pool_clone.clone();
-            tokio::spawn(handle_client(socket, db_pool));
+            let config = config_clone.clone();
+            tokio::spawn(handle_client(socket, db_pool, config));
         }
     });
 
     // Launch the Rocket server
-    rocket::build()
+    let api_server_ip = config.api_server_ip.parse::<std::net::IpAddr>().expect("Invalid IP address for API server");
+    let figment = rocket::Config::figment()
+        .merge(("address", api_server_ip))
+        .merge(("port", config.api_server_port));
+
+    rocket::custom(figment)
         .manage(db_pool)
         .mount(
             "/api",
@@ -99,12 +113,32 @@ async fn main() {
         .await.unwrap();
 }
 
-async fn handle_client(socket: tokio::net::TcpStream, db_pool: SqlitePool) {
+async fn handle_client(socket: tokio::net::TcpStream, db_pool: SqlitePool, config: Config) {
     let reader = BufReader::new(socket);
     let mut lines = reader.lines();
 
     while let Ok(Some(line)) = lines.next_line().await {
         if let Ok(log_message) = serde_json::from_str::<LogMessage>(&line) {
+            // Check if the hash is already in the database
+            let hash_exists: bool = sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM logs WHERE hash = ?)")
+                .bind(&log_message.hash)
+                .fetch_one(&db_pool)
+                .await
+                .unwrap_or(0) != 0;
+
+            if !hash_exists {
+                // Get the total number of distinct hashes
+                let num_hashes: i64 = sqlx::query_scalar("SELECT COUNT(DISTINCT hash) FROM logs")
+                    .fetch_one(&db_pool)
+                    .await
+                    .unwrap_or(0);
+
+                if num_hashes >= config.max_hashes as i64 {
+                    // Do not log this message
+                    continue;
+                }
+            }
+
             // Insert the log_message into the database
             sqlx::query("
                 INSERT INTO logs (level, message, target, module_path, file, line, hash, timestamp)
@@ -121,6 +155,30 @@ async fn handle_client(socket: tokio::net::TcpStream, db_pool: SqlitePool) {
             .execute(&db_pool)
             .await
             .expect("Failed to insert log into database.");
+
+            // Now check if the number of logs for this hash exceeds max_log_count + 100
+            let log_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM logs WHERE hash = ?")
+                .bind(&log_message.hash)
+                .fetch_one(&db_pool)
+                .await
+                .unwrap_or(0);
+
+            if log_count > (config.max_log_count + 50) as i64 {
+                // Delete the oldest 100 logs for this hash
+                sqlx::query("
+                    DELETE FROM logs 
+                    WHERE id IN (
+                        SELECT id FROM logs 
+                        WHERE hash = ? 
+                        ORDER BY timestamp ASC 
+                        LIMIT 50
+                    )
+                ")
+                .bind(&log_message.hash)
+                .execute(&db_pool)
+                .await
+                .expect("Failed to delete old logs.");
+            }
         }
     }
 }

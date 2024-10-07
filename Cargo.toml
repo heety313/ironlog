@@ -1,6 +1,6 @@
 [package]
 name = "ironlog"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/heety313/ironlog"
@@ -19,7 +19,6 @@ path = "src/bin/main.rs"
 name = "example"
 path = "examples/example.rs"
 
-
 [dependencies]
 log = { version = "0.4.22", features = ["std"] }
 chrono = "0.4"
@@ -36,3 +35,4 @@ sqlx = { version = "0.7", features = [
     "macros",
     "runtime-tokio-rustls",
 ] }
+clap = { version = "4.0", features = ["derive"] }
