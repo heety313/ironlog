@@ -31,4 +31,8 @@ pub struct Config {
     /// Max number of logs per hash
     #[clap(long, default_value = "10000")]
     pub max_log_count: usize,
+
+    //max length of a log message
+    #[clap(long, default_value = "10")]
+    pub max_log_length: usize,
 }

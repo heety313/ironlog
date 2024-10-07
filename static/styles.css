@@ -321,6 +321,27 @@ td:last-child {
     word-wrap: break-word;
 }
 
+.ui-slider .ui-slider-handle {
+    width: 10px;      /* Set the desired width to make it slimmer */
+    height: 20px;     /* Adjust the height as needed */
+    margin-top: 0px; /* Center the handle vertically on the slider bar */
+    background-color: #4c6075; /* Optional: Change handle color */
+    border-radius: 2px; /* Optional: Adjust border radius */
+    border: none;    /* Optional: Remove border if desired */
+}
+
+#slider-range .ui-slider-range {
+    background-color: #355f3c; /* Match the handle color or choose a different one */
+}
+
+/* Dark mode adjustments */
+body.dark-mode #slider-range .ui-slider-handle {
+    background-color: #91c8ec !important;
+}
+
+body.dark-mode #slider-range .ui-slider-range {
+    background-color: #24b36b;
+}
 /* Log Level Colors */
 .level-label {
     display: inline-block;
@@ -330,40 +351,46 @@ td:last-child {
     font-weight: bold;
 }
 
-.level-label.INFO {
+.level-label.level-INFO {
     background-color: #77dd77;
 }
 
-.level-label.WARN {
+.level-label.level-WARN {
     background-color: #ffb347;
 }
 
-.level-label.ERROR {
+.level-label.level-ERROR {
     background-color: #ff6961;
 }
 
-.level-label.DEBUG {
+.level-label.level-DEBUG {
     background-color: #aec6cf;
 }
 
+/* Dark Mode Styles */
 body.dark-mode .level-label {
     color: #ffffff;
 }
 
-body.dark-mode .level-label.INFO {
+body.dark-mode .level-label.level-INFO {
     background-color: #264f78;
 }
 
-body.dark-mode .level-label.WARN {
+body.dark-mode .level-label.level-WARN {
     background-color: #b89500;
 }
 
-body.dark-mode .level-label.ERROR {
+body.dark-mode .level-label.level-ERROR {
     background-color: #be1100;
 }
 
-body.dark-mode .level-label.DEBUG {
+body.dark-mode .level-label.level-DEBUG {
     background-color: #6a9955;
+}
+
+.level-label.level-ERROR::after,
+.level-label.level-DEBUG::after {
+    content: none; /* or content: normal; */
 }
 
 /* Search Bar Styles */
@@ -602,10 +629,6 @@ body.dark-mode #timeInputs input {
     background-color: #3c3c3c;
     color: #d4d4d4;
     border-color: #555;
-}
-
-.ui-slider-handle {
-    outline: none;
 }
 
 body.dark-mode .ui-widget-header {

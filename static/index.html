@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 
+<script src="/resources/jquery.min.js"></script>
+<script src="/resources/jquery-ui.min.js"></script>
+<link rel="stylesheet" href="/resources/jquery-ui.css">
+
+
 <head>
     <meta charset="UTF-8">
     <title>Log Viewer</title>
@@ -11,7 +16,7 @@
     <!-- Dark Mode Toggle Switch -->
     <div id="darkModeToggle">
         <label class="dark-mode-label">
-            <span class="label-text" style="margin-right: 5px;">Dark Mode</span>
+            <span class="label-text">Dark Mode</span>
             <input type="checkbox" id="darkModeCheckbox">
             <span class="slider"></span>
         </label>
@@ -77,9 +82,7 @@
         </table>
     </div>
 
-    <script src="/resources/jquery.min.js"></script>
-    <script src="/resources/jquery-ui.min.js"></script>
-    <link rel="stylesheet" href="/resources/jquery-ui.css">
+
     <script>
         function getSliderPositions() {
             const slider = $("#slider-range");
@@ -367,15 +370,15 @@
                     });
 
                     row.innerHTML = `
-                <td class="hash-column">
-                    <span class="hash-badge-table" style="background-color: ${hashColors[log.hash]};">${log.hash}</span>
-                </td>
-                <td class="timestamp-column">${formattedTimestamp}</td>
-                <td class="level-column">
-                    <span class="level-label ${log.level}">${log.level}</span>
-                </td>
-                <td>${log.message}</td>
-            `;
+    <td class="hash-column">
+        <span class="hash-badge-table" style="background-color: ${hashColors[log.hash]};">${log.hash}</span>
+    </td>
+    <td class="timestamp-column">${formattedTimestamp}</td>
+    <td class="level-column">
+        <span class="level-label level-${log.level}">${log.level}</span>
+    </td>
+    <td>${log.message}</td>
+`;
                     logsElement.appendChild(row);
                 });
             });

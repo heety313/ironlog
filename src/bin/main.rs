@@ -1,8 +1,7 @@
 #[macro_use]
 extern crate rocket;
 
-mod config;
-use config::Config;
+use ironlog::config::Config;
 
 use rocket::http::ContentType;
 use rocket::form::FromForm;
@@ -113,13 +112,29 @@ async fn main() {
         .await.unwrap();
 }
 
+fn truncate_string(s: &str, max_bytes: usize) -> String {
+    if s.len() <= max_bytes {
+        s.to_string()
+    } else {
+        let mut end = max_bytes;
+        while !s.is_char_boundary(end) && end > 0 {
+            end -= 1;
+        }
+        s[..end].to_string()
+    }
+}
+
 async fn handle_client(socket: tokio::net::TcpStream, db_pool: SqlitePool, config: Config) {
     let reader = BufReader::new(socket);
     let mut lines = reader.lines();
 
     while let Ok(Some(line)) = lines.next_line().await {
         if let Ok(log_message) = serde_json::from_str::<LogMessage>(&line) {
-            // Check if the hash is already in the database
+            let mut log_message = log_message; // Make it mutable
+
+            // Truncate the message if it exceeds max_log_length
+            log_message.message = truncate_string(&log_message.message, config.max_log_length);
+
             let hash_exists: bool = sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM logs WHERE hash = ?)")
                 .bind(&log_message.hash)
                 .fetch_one(&db_pool)
@@ -156,7 +171,7 @@ async fn handle_client(socket: tokio::net::TcpStream, db_pool: SqlitePool, confi
             .await
             .expect("Failed to insert log into database.");
 
-            // Now check if the number of logs for this hash exceeds max_log_count + 100
+            // Now check if the number of logs for this hash exceeds max_log_count + 50
             let log_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM logs WHERE hash = ?")
                 .bind(&log_message.hash)
                 .fetch_one(&db_pool)
@@ -164,7 +179,7 @@ async fn handle_client(socket: tokio::net::TcpStream, db_pool: SqlitePool, confi
                 .unwrap_or(0);
 
             if log_count > (config.max_log_count + 50) as i64 {
-                // Delete the oldest 100 logs for this hash
+                // Delete the oldest 50 logs for this hash
                 sqlx::query("
                     DELETE FROM logs 
                     WHERE id IN (
