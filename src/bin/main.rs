@@ -1,16 +1,16 @@
 #[macro_use] extern crate rocket;
 
 use rocket::http::ContentType;
+use rocket::form::FromForm;
+use rocket::serde::json::Json;
 use include_dir::{include_dir, Dir};
 use std::path::{Path, PathBuf};
-use rocket::serde::json::Json;
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use sqlx::{SqlitePool, sqlite::SqlitePoolOptions, Row};
 use std::fs;
-use rocket::form::FromForm;
-use chrono::Utc;
+use chrono::{Utc, Duration};
 
 
 static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/static");
@@ -91,6 +91,7 @@ async fn main() {
                 get_hashes,
                 get_logs,
                 list_files,
+                get_date_range,
             ],
         )
         .mount("/", routes![index, serve_file])
@@ -148,6 +149,36 @@ async fn get_hashes(db_pool: &rocket::State<SqlitePool>) -> Json<Vec<String>> {
     Json(hashes)
 }
 
+#[derive(Serialize)]
+struct DateRange {
+    min_date: String,
+    max_date: String,
+}
+
+#[get("/date_range")]
+async fn get_date_range(db_pool: &rocket::State<SqlitePool>) -> Json<DateRange> {
+    let min_date: String = sqlx::query_scalar("SELECT MIN(timestamp) FROM logs")
+        .fetch_one(db_pool.inner())
+        .await
+        .unwrap_or_else(|_| Utc::now().to_rfc3339());
+
+    let max_date: String = sqlx::query_scalar("SELECT MAX(timestamp) FROM logs")
+        .fetch_one(db_pool.inner())
+        .await
+        .unwrap_or_else(|_| Utc::now().to_rfc3339());
+
+    if max_date.is_empty() {
+        return Json(DateRange {
+            min_date: (Utc::now() - Duration::days(7)).to_rfc3339(),
+            max_date: Utc::now().to_rfc3339(),
+        });
+    }
+
+    Json(DateRange {
+        min_date,
+        max_date,
+    })
+}
 
 #[derive(FromForm)]
 struct LogQuery {
@@ -179,31 +210,19 @@ async fn get_logs(
         WHERE hash = ");
     builder.push_bind(hash);
 
-    // Variables to store cloned values
-    let mut start = None;
-    let mut end = None;
     let mut count = None;
 
     if let Some(ref query_params) = q {
-        // Clone start and end to ensure they live long enough
         if let Some(ref s) = query_params.start {
-            start = Some(s.clone());
+            builder.push(" AND strftime('%s', timestamp) >= ");
+            builder.push_bind(s);
         }
         if let Some(ref e) = query_params.end {
-            end = Some(e.clone());
+            builder.push(" AND strftime('%s', timestamp) <= ");
+            builder.push_bind(e);
         }
         // `count` is Copy, so no need to clone
         count = query_params.count;
-    }
-
-    // Add conditions based on `start` and `end`
-    if let Some(s) = start {
-        builder.push(" AND timestamp >= ");
-        builder.push_bind(s);
-    }
-    if let Some(e) = end {
-        builder.push(" AND timestamp <= ");
-        builder.push_bind(e);
     }
 
     builder.push(" ORDER BY timestamp DESC");

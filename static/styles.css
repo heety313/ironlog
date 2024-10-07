@@ -1,5 +1,6 @@
 /* General Styles */
-html, body {
+html,
+body {
     height: 100%;
     margin: 0;
     padding: 0;
@@ -10,7 +11,8 @@ body {
     display: flex;
     flex-direction: row;
     background-color: #f5f5f5;
-    position: relative; /* Added to position the toggle switch */
+    position: relative;
+    /* Added to position the toggle switch */
 }
 
 /* Dark Mode Styles */
@@ -132,20 +134,38 @@ body.dark-mode #main {
 }
 
 /* Log Levels Container */
-#main > div:first-of-type {
+#main>div:first-of-type {
     margin-bottom: 10px;
     display: flex;
     align-items: center;
     flex-wrap: wrap;
 }
 
-#main > div:first-of-type h2 {
+#main>div:first-of-type h2 {
     margin: 0 10px 0 0;
     font-size: 18px;
 }
 
-body.dark-mode #main > div:first-of-type h2 {
+body.dark-mode #main>div:first-of-type h2 {
     color: #d4d4d4;
+}
+
+/* Logs to fetch input field */
+#logCountInput {
+    width: 60px;
+    margin-left: 10px;
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #ffffff;
+    color: #333;
+}
+
+/* Dark mode styles */
+body.dark-mode #logCountInput {
+    background-color: #3c3c3c;
+    color: #d4d4d4;
+    border-color: #555;
 }
 
 /* Separator Line */
@@ -244,7 +264,8 @@ body.dark-mode table {
     background-color: #1e1e1e;
 }
 
-th, td {
+th,
+td {
     padding: 5px 10px;
     border-bottom: 1px solid #ccc;
     text-align: left;
@@ -255,7 +276,8 @@ th, td {
     color: #333;
 }
 
-body.dark-mode th, body.dark-mode td {
+body.dark-mode th,
+body.dark-mode td {
     border-bottom: 1px solid #3c3c3c;
     color: #d4d4d4;
 }
@@ -390,29 +412,34 @@ body.dark-mode .hash-badge-table {
 }
 
 /* Dump Logs Button */
-#dumpButton, #copyButton {
+#dumpButton,
+#copyButton {
     padding: 5px 10px;
     font-size: 14px;
     background-color: #f0f0f0;
     color: #333;
     border: 1px solid #ccc;
-    border-radius: 2px; /* Adjusted to make buttons more squared off */
+    border-radius: 2px;
+    /* Adjusted to make buttons more squared off */
     cursor: pointer;
     margin-right: 10px;
     transition: background-color 0.3s ease;
 }
 
-#dumpButton:hover, #copyButton:hover {
+#dumpButton:hover,
+#copyButton:hover {
     background-color: #e0e0e0;
 }
 
-body.dark-mode #dumpButton, body.dark-mode #copyButton {
+body.dark-mode #dumpButton,
+body.dark-mode #copyButton {
     background-color: #3c3c3c;
     color: #d4d4d4;
     border: 1px solid #555555;
 }
 
-body.dark-mode #dumpButton:hover, body.dark-mode #copyButton:hover {
+body.dark-mode #dumpButton:hover,
+body.dark-mode #copyButton:hover {
     background-color: #505050;
 }
 
@@ -421,38 +448,49 @@ body.dark-mode #dumpButton:hover, body.dark-mode #copyButton:hover {
     body {
         flex-direction: column;
     }
+
     #sidebar {
         width: 100%;
         border-right: none;
         border-bottom: 1px solid #ccc;
     }
+
     body.dark-mode #sidebar {
         border-bottom: 1px solid #3c3c3c;
     }
+
     #main {
         padding: 10px;
     }
-    th, td {
+
+    th,
+    td {
         padding: 5px 8px;
         font-size: 11px;
     }
+
     .badge {
         padding: 4px 8px;
         font-size: 12px;
     }
+
     #searchInput {
         margin-left: 5px;
     }
-    #main > div:first-of-type {
+
+    #main>div:first-of-type {
         flex-direction: column;
         align-items: flex-start;
     }
-    #main > div:first-of-type h2 {
+
+    #main>div:first-of-type h2 {
         margin-bottom: 5px;
     }
+
     .separator {
         display: none;
     }
+
     #levels {
         margin-top: 5px;
     }
@@ -481,7 +519,8 @@ body.dark-mode #dumpButton:hover, body.dark-mode #copyButton:hover {
     height: 20px;
     background-color: #ccc;
     transition: background-color 0.3s;
-    border-radius: 4px; /* Adjusted to make it more squared off */
+    border-radius: 4px;
+    /* Adjusted to make it more squared off */
     margin-right: 10px;
 }
 
@@ -494,14 +533,15 @@ body.dark-mode #dumpButton:hover, body.dark-mode #copyButton:hover {
     top: 2px;
     background-color: #fff;
     transition: transform 0.3s;
-    border-radius: 2px; /* Adjusted to make it more squared off */
+    border-radius: 2px;
+    /* Adjusted to make it more squared off */
 }
 
-.dark-mode-label input:checked + .slider {
+.dark-mode-label input:checked+.slider {
     background-color: #2196F3;
 }
 
-.dark-mode-label input:checked + .slider::before {
+.dark-mode-label input:checked+.slider::before {
     transform: translateX(20px);
 }
 
@@ -518,6 +558,67 @@ body.dark-mode .slider {
     background-color: #555;
 }
 
-body.dark-mode .dark-mode-label input:checked + .slider {
+body.dark-mode .dark-mode-label input:checked+.slider {
     background-color: #0e639c;
+}
+
+#timeRangeSelector {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f0f0f0;
+    border-radius: 5px;
+}
+
+body.dark-mode #timeRangeSelector {
+    background-color: #2d2d30;
+}
+
+#timeRangeSelector h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+#slider-range {
+    margin-bottom: 15px;
+}
+
+#timeInputs {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#timeInputs label {
+    margin-right: 5px;
+}
+
+#timeInputs input {
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+}
+
+body.dark-mode #timeInputs input {
+    background-color: #3c3c3c;
+    color: #d4d4d4;
+    border-color: #555;
+}
+
+.ui-slider-handle {
+    outline: none;
+}
+
+body.dark-mode .ui-widget-header {
+    background: #0e639c;
+}
+
+body.dark-mode .ui-widget-content {
+    background: #3c3c3c;
+    border-color: #555;
+}
+
+body.dark-mode .ui-state-default,
+body.dark-mode .ui-widget-content .ui-state-default {
+    background: #1e1e1e;
+    border-color: #0e639c;
 }
