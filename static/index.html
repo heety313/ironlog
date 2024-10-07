@@ -11,9 +11,9 @@
     <!-- Dark Mode Toggle Switch -->
     <div id="darkModeToggle">
         <label class="dark-mode-label">
+            <span class="label-text" style="margin-right: 5px;">Dark Mode</span>
             <input type="checkbox" id="darkModeCheckbox">
             <span class="slider"></span>
-            <span class="label-text">Dark Mode</span>
         </label>
     </div>
 
@@ -36,8 +36,7 @@
             </div>
         </div>
 
-        <div id="timeRangeSelector">
-            <h3>Select Time Range</h3>
+        <div id="utilityContainer">
             <div id="slider-range"></div>
             <div id="timeInputs">
                 <label for="startTime">Start Time:</label>
@@ -48,17 +47,22 @@
         </div>
 
         <!-- Dump Logs Button -->
-        <div style="margin-top: 10px; display: flex; align-items: center;">
+        <div id="utilityContainer">
+        <div style="display: flex; align-items: center;">
             <button id="dumpButton">Download Visible Logs</button>
             <button id="copyButton">Copy Visible Logs</button>
-            <label for="logCountInput" style="margin-left: 10px;">Logs to fetch:</label>
+            <label for="logCountInput" style="margin-right: 10px;">Logs to fetch:</label>
             <input type="number" id="logCountInput" value="100" min="1">
         </div>
+    </div>
+        
         <!-- Logs Header with Search Bar -->
-        <div id="searchContainer">
-            <h2 style="margin-right: 10px;">Logs</h2>
-            <input type="text" id="searchInput" placeholder="Search logs..." />
+        <div id="utilityContainer">
+        <div style="display: flex; align-items: center;">
+            <input type="text" id="searchInput" placeholder="Search logs..." style="height: 1.5em; padding: 0.2em;"/>
         </div>
+    </div>
+
 
         <table id="logs-table">
             <thead>
@@ -73,10 +77,9 @@
         </table>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
-    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
-
+    <script src="/resources/jquery.min.js"></script>
+    <script src="/resources/jquery-ui.min.js"></script>
+    <link rel="stylesheet" href="/resources/jquery-ui.css">
     <script>
         function getSliderPositions() {
             const slider = $("#slider-range");
@@ -99,31 +102,17 @@
         }
 
         function updateCounterRange(newMin, newMax) {
-            let sliderAtMax = isSliderAtMaxRange();
-
             const slider = $("#slider-range");
-            const currentMin = slider.slider("values", 0);
-            const currentMax = slider.slider("values", 1);
+            const oldMin = slider.slider("option", "min");
+            const oldMax = slider.slider("option", "max");
 
-            // Update the slider's min and max
-            slider.slider("option", "min", newMin);
-            slider.slider("option", "max", newMax);
-
-            // Adjust the current values if they're outside the new range
-            if (currentMin < newMin) {
-                slider.slider("values", 0, newMin);
-            }
-            if (currentMax > newMax) {
-                slider.slider("values", 1, newMax);
+            // Only update the slider's min and max if they have changed
+            if (newMin !== oldMin || newMax !== oldMax) {
+                slider.slider("option", "min", newMin);
+                slider.slider("option", "max", newMax);
             }
 
-            // Update the displayed values
-            updateTimeInputs(slider.slider("values", 0), slider.slider("values", 1));
-
-            // If the slider was at max or min before, keep it there
-            if (sliderAtMax) {
-                slider.slider("values", 1, newMax);
-            }
+            // Don't update slider values or time inputs unless necessary
         }
 
         // Fetches the date range for the logs
@@ -139,21 +128,27 @@
                     throw new Error('Server returned invalid date range');
                 }
 
-                const minDate = new Date(data.min_date);
-                const maxDate = new Date(data.max_date);
-
-                // Set the new date range
-                updateCounterRange(minDate.getTime(), maxDate.getTime());
+                let minDate = new Date(data.min_date);
+                let maxDate = new Date(data.max_date);
 
                 if (isNaN(minDate.getTime()) || isNaN(maxDate.getTime())) {
                     throw new Error('Invalid date parsed from server data');
                 }
 
+                // If the date range is too narrow, adjust minDate
+                if (maxDate.getTime() - minDate.getTime() < 3600000) { // Less than 1 hour apart
+                    minDate = new Date(maxDate.getTime() - 24 * 3600000); // Set minDate to 24 hours before maxDate
+                    console.warn('Date range too narrow, adjusting minDate to 24 hours before maxDate');
+                }
+
+                // Set the new date range
+                updateCounterRange(minDate.getTime(), maxDate.getTime());
+
                 return { minDate, maxDate };
             } catch (error) {
                 console.error('Error in fetchDateRange:', error);
                 // Fallback to a default range if fetch fails
-                const fallbackMinDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
+                const fallbackMinDate = new Date(Date.now() - 60 * 1000); // 1 minago
                 const fallbackMaxDate = new Date();
                 console.log('Using fallback date range:', { fallbackMinDate, fallbackMaxDate });
                 return {
@@ -163,17 +158,43 @@
             }
         }
 
+
         function formatDateTime(date) {
             return date.toISOString().slice(0, 19).replace('T', ' ');
         }
 
+
+        let isProgrammaticUpdate = false;
+
         function updateTimeInputs(start, end) {
+            isProgrammaticUpdate = true;
             $("#startTime").val(formatDateTime(new Date(start)));
             $("#endTime").val(formatDateTime(new Date(end)));
+            isProgrammaticUpdate = false;
         }
 
+        $("#startTime, #endTime").on("change", function () {
+            if (isProgrammaticUpdate) return;
+            const startTime = new Date($("#startTime").val().replace(' ', 'T')).getTime();
+            const endTime = new Date($("#endTime").val().replace(' ', 'T')).getTime();
+
+            if (!isNaN(startTime) && !isNaN(endTime)) {
+                $("#slider-range").slider("values", [startTime, endTime]);
+            }
+        });
+
+        // Similarly, for slider updates
+        $("#slider-range").slider({
+            // ...
+            slide: function (event, ui) {
+                isProgrammaticUpdate = true;
+                updateTimeInputs(ui.values[0], ui.values[1]);
+                isProgrammaticUpdate = false;
+            }
+        });
+
         // Initialize the date range picker
-        $(async function() {
+        $(async function () {
             try {
                 const { minDate, maxDate } = await fetchDateRange();
 
@@ -184,7 +205,7 @@
                     // 1 sec
                     step: 1000,
                     values: [minDate.getTime(), maxDate.getTime()],
-                    slide: function(event, ui) {
+                    slide: function (event, ui) {
                         updateTimeInputs(ui.values[0], ui.values[1]);
                     }
                 });
@@ -193,7 +214,7 @@
                 updateTimeInputs(minDate.getTime(), maxDate.getTime());
 
                 // Add event listeners for manual input changes
-                $("#startTime, #endTime").on("change", function() {
+                $("#startTime, #endTime").on("change", function () {
                     const startTime = new Date($("#startTime").val().replace(' ', 'T')).getTime();
                     const endTime = new Date($("#endTime").val().replace(' ', 'T')).getTime();
 
