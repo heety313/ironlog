@@ -98,13 +98,16 @@ async fn main() {
 
     rocket::custom(figment)
         .manage(db_pool)
+        .manage(config.clone())
         .mount(
             "/api",
             routes![
                 get_hashes,
                 get_logs,
-                list_files,
                 get_date_range,
+                get_log_info,
+                purge_logs,
+                insert_log,
             ],
         )
         .mount("/", routes![index, serve_file])
@@ -287,12 +290,14 @@ async fn get_logs(
 
     if let Some(ref query_params) = q {
         if let Some(ref s) = query_params.start {
-            builder.push(" AND strftime('%s', timestamp) >= ");
+            builder.push(" AND strftime('%s', timestamp) >= strftime('%s', ");
             builder.push_bind(s);
+            builder.push(")");
         }
         if let Some(ref e) = query_params.end {
-            builder.push(" AND strftime('%s', timestamp) <= ");
+            builder.push(" AND strftime('%s', timestamp) <= strftime('%s', ");
             builder.push_bind(e);
+            builder.push(")");
         }
         // `count` is Copy, so no need to clone
         count = query_params.count;
@@ -333,4 +338,180 @@ fn serve_file(file: PathBuf) -> Option<(ContentType, Vec<u8>)> {
         .unwrap_or(ContentType::Bytes);
 
     Some((content_type, file.contents().to_vec()))
+}
+
+// New Struct for LogInfo
+#[derive(Serialize)]
+struct LogInfo {
+    db_size: u64,           // in bytes
+    total_log_count: i64,
+    number_of_hashes: i64,
+    min_date: String,
+    max_date: String,
+    hash_list: Vec<String>,
+}
+
+// Endpoint to get log info
+#[get("/log_info")]
+async fn get_log_info(
+    db_pool: &rocket::State<SqlitePool>,
+    config: &rocket::State<Config>,
+) -> Option<Json<LogInfo>> {
+    // Get the size of the db file
+    let db_path = &config.log_db;
+    let metadata = fs::metadata(db_path).ok()?;
+    let db_size = metadata.len();
+
+    // Get total log count
+    let total_log_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM logs")
+        .fetch_one(db_pool.inner())
+        .await
+        .ok()?;
+
+    // Get number of hashes
+    let number_of_hashes: i64 = sqlx::query_scalar("SELECT COUNT(DISTINCT hash) FROM logs")
+        .fetch_one(db_pool.inner())
+        .await
+        .ok()?;
+
+    // Get date range
+    let min_date: String = sqlx::query_scalar("SELECT MIN(timestamp) FROM logs")
+        .fetch_one(db_pool.inner())
+        .await
+        .unwrap_or_else(|_| Utc::now().to_rfc3339());
+
+    let max_date: String = sqlx::query_scalar("SELECT MAX(timestamp) FROM logs")
+        .fetch_one(db_pool.inner())
+        .await
+        .unwrap_or_else(|_| Utc::now().to_rfc3339());
+
+    if max_date.is_empty() {
+        return Some(Json(LogInfo {
+            db_size,
+            total_log_count,
+            number_of_hashes,
+            min_date: (Utc::now() - Duration::days(7)).to_rfc3339(),
+            max_date: Utc::now().to_rfc3339(),
+            hash_list: vec![],
+        }));
+    }
+
+    // Get list of hash names
+    let rows = sqlx::query("SELECT DISTINCT hash FROM logs")
+        .fetch_all(db_pool.inner())
+        .await
+        .ok()?;
+
+    let hash_list = rows.into_iter()
+        .map(|row| row.get::<String, _>("hash"))
+        .collect();
+
+    Some(Json(LogInfo {
+        db_size,
+        total_log_count,
+        number_of_hashes,
+        min_date,
+        max_date,
+        hash_list,
+    }))
+}
+
+// Endpoint to purge all logs
+#[post("/purge_logs")]
+async fn purge_logs(db_pool: &rocket::State<SqlitePool>) -> Json<String> {
+    let result = sqlx::query("DELETE FROM logs")
+        .execute(db_pool.inner())
+        .await;
+
+    match result {
+        Ok(_) => Json("Logs purged successfully.".to_string()),
+        Err(e) => Json(format!("Failed to purge logs: {}", e)),
+    }
+}
+
+// Endpoint to insert a log
+#[post("/insert_log", data = "<log_message>")]
+async fn insert_log(
+    log_message: Json<LogMessage>,
+    db_pool: &rocket::State<SqlitePool>,
+    config: &rocket::State<Config>,
+) -> Json<String> {
+    let config = config.inner();
+    let db_pool = db_pool.inner();
+
+    let mut log_message = log_message.into_inner(); // Consume Json wrapper
+
+    // Truncate the message if it exceeds max_log_length
+    log_message.message = truncate_string(&log_message.message, config.max_log_length);
+
+    // Check if the hash exists
+    let hash_exists: bool = sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM logs WHERE hash = ?)")
+        .bind(&log_message.hash)
+        .fetch_one(db_pool)
+        .await
+        .unwrap_or(0) != 0;
+
+    if !hash_exists {
+        // Get the total number of distinct hashes
+        let num_hashes: i64 = sqlx::query_scalar("SELECT COUNT(DISTINCT hash) FROM logs")
+            .fetch_one(db_pool)
+            .await
+            .unwrap_or(0);
+
+        if num_hashes >= config.max_hashes as i64 {
+            // Do not log this message
+            return Json("Maximum number of hashes reached. Log not inserted.".to_string());
+        }
+    }
+
+    // Insert the log_message into the database
+    let result = sqlx::query("
+        INSERT INTO logs (level, message, target, module_path, file, line, hash, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ")
+    .bind(&log_message.level)
+    .bind(&log_message.message)
+    .bind(&log_message.target)
+    .bind(&log_message.module_path)
+    .bind(&log_message.file)
+    .bind(log_message.line)
+    .bind(&log_message.hash)
+    .bind(&log_message.timestamp)
+    .execute(db_pool)
+    .await;
+
+    match result {
+        Ok(_) => (),
+        Err(e) => return Json(format!("Failed to insert log into database: {}", e)),
+    }
+
+    // Now check if the number of logs for this hash exceeds max_log_count + 50
+    let log_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM logs WHERE hash = ?")
+        .bind(&log_message.hash)
+        .fetch_one(db_pool)
+        .await
+        .unwrap_or(0);
+
+    if log_count > (config.max_log_count + 50) as i64 {
+        // Delete the oldest 50 logs for this hash
+        let result = sqlx::query("
+            DELETE FROM logs 
+            WHERE id IN (
+                SELECT id FROM logs 
+                WHERE hash = ? 
+                ORDER BY timestamp ASC 
+                LIMIT 50
+            )
+        ")
+        .bind(&log_message.hash)
+        .execute(db_pool)
+        .await;
+
+        match result {
+            Ok(_) => (),
+            Err(e) => return Json(format!("Failed to delete old logs: {}", e)),
+        }
+    }
+
+    Json("Log inserted successfully.".to_string())
 }
