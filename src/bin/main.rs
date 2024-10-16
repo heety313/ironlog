@@ -3,6 +3,8 @@ extern crate rocket;
 
 use ironlog::config::Config;
 
+mod client_handler;
+
 use rocket::http::ContentType;
 use rocket::form::FromForm;
 use rocket::serde::json::Json;
@@ -19,7 +21,7 @@ use clap::Parser;
 static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/static");
 
 #[derive(Serialize, Deserialize, Clone, sqlx::FromRow)]
-struct LogMessage {
+pub struct LogMessage {
     level: String,
     message: String,
     target: String,
@@ -86,7 +88,7 @@ async fn main() {
             let (socket, _) = listener.accept().await.unwrap();
             let db_pool = db_pool_clone.clone();
             let config = config_clone.clone();
-            tokio::spawn(handle_client(socket, db_pool, config));
+            tokio::spawn(client_handler::handle_client(socket, db_pool, config));
         }
     });
 
@@ -115,7 +117,7 @@ async fn main() {
         .await.unwrap();
 }
 
-fn truncate_string(s: &str, max_bytes: usize) -> String {
+pub fn truncate_string(s: &str, max_bytes: usize) -> String {
     if s.len() <= max_bytes {
         s.to_string()
     } else {
@@ -124,80 +126,6 @@ fn truncate_string(s: &str, max_bytes: usize) -> String {
             end -= 1;
         }
         s[..end].to_string()
-    }
-}
-
-async fn handle_client(socket: tokio::net::TcpStream, db_pool: SqlitePool, config: Config) {
-    let reader = BufReader::new(socket);
-    let mut lines = reader.lines();
-
-    while let Ok(Some(line)) = lines.next_line().await {
-        if let Ok(log_message) = serde_json::from_str::<LogMessage>(&line) {
-            let mut log_message = log_message; // Make it mutable
-
-            // Truncate the message if it exceeds max_log_length
-            log_message.message = truncate_string(&log_message.message, config.max_log_length);
-
-            let hash_exists: bool = sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM logs WHERE hash = ?)")
-                .bind(&log_message.hash)
-                .fetch_one(&db_pool)
-                .await
-                .unwrap_or(0) != 0;
-
-            if !hash_exists {
-                // Get the total number of distinct hashes
-                let num_hashes: i64 = sqlx::query_scalar("SELECT COUNT(DISTINCT hash) FROM logs")
-                    .fetch_one(&db_pool)
-                    .await
-                    .unwrap_or(0);
-
-                if num_hashes >= config.max_hashes as i64 {
-                    // Do not log this message
-                    continue;
-                }
-            }
-
-            // Insert the log_message into the database
-            sqlx::query("
-                INSERT INTO logs (level, message, target, module_path, file, line, hash, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ")
-            .bind(&log_message.level)
-            .bind(&log_message.message)
-            .bind(&log_message.target)
-            .bind(&log_message.module_path)
-            .bind(&log_message.file)
-            .bind(log_message.line)
-            .bind(&log_message.hash)
-            .bind(&log_message.timestamp)
-            .execute(&db_pool)
-            .await
-            .expect("Failed to insert log into database.");
-
-            // Now check if the number of logs for this hash exceeds max_log_count + 50
-            let log_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM logs WHERE hash = ?")
-                .bind(&log_message.hash)
-                .fetch_one(&db_pool)
-                .await
-                .unwrap_or(0);
-
-            if log_count > (config.max_log_count + 50) as i64 {
-                // Delete the oldest 50 logs for this hash
-                sqlx::query("
-                    DELETE FROM logs 
-                    WHERE id IN (
-                        SELECT id FROM logs 
-                        WHERE hash = ? 
-                        ORDER BY timestamp ASC 
-                        LIMIT 50
-                    )
-                ")
-                .bind(&log_message.hash)
-                .execute(&db_pool)
-                .await
-                .expect("Failed to delete old logs.");
-            }
-        }
     }
 }
 
@@ -271,7 +199,6 @@ async fn get_logs(
 ) -> Option<Json<Vec<LogMessage>>> {
     use sqlx::QueryBuilder;
 
-    // Initialize the QueryBuilder
     let mut builder = QueryBuilder::<sqlx::Sqlite>::new("
         SELECT
             level,
@@ -290,28 +217,23 @@ async fn get_logs(
 
     if let Some(ref query_params) = q {
         if let Some(ref s) = query_params.start {
-            builder.push(" AND strftime('%s', timestamp) >= strftime('%s', ");
+            builder.push(" AND timestamp >= ");
             builder.push_bind(s);
-            builder.push(")");
         }
         if let Some(ref e) = query_params.end {
-            builder.push(" AND strftime('%s', timestamp) <= strftime('%s', ");
+            builder.push(" AND timestamp <= ");
             builder.push_bind(e);
-            builder.push(")");
         }
-        // `count` is Copy, so no need to clone
         count = query_params.count;
     }
 
     builder.push(" ORDER BY timestamp DESC");
 
-    // Add LIMIT if `count` is provided
     if let Some(c) = count {
         builder.push(" LIMIT ");
         builder.push_bind(c);
     }
 
-    // Build and execute the query
     let query = builder.build_query_as::<LogMessage>();
 
     let logs = query
@@ -321,6 +243,7 @@ async fn get_logs(
 
     Some(Json(logs))
 }
+
 
 #[get("/list_files")]
 fn list_files() -> String {

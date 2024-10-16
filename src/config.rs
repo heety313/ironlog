@@ -33,6 +33,6 @@ pub struct Config {
     pub max_log_count: usize,
 
     //max length of a log message
-    #[clap(long, default_value = "10")]
+    #[clap(long, default_value = "1000")]
     pub max_log_length: usize,
 }

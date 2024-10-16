@@ -42,7 +42,6 @@
         </div>
 
         <div id="utilityContainer">
-            <div id="slider-range"></div>
             <div id="timeInputs">
                 <label for="startTime">Start Time:</label>
                 <input type="datetime-local" id="startTime" name="startTime">
@@ -53,20 +52,20 @@
 
         <!-- Dump Logs Button -->
         <div id="utilityContainer">
-        <div style="display: flex; align-items: center;">
-            <button id="dumpButton">Download Visible Logs</button>
-            <button id="copyButton">Copy Visible Logs</button>
-            <label for="logCountInput" style="margin-right: 10px;">Logs to fetch:</label>
-            <input type="number" id="logCountInput" value="100" min="1">
+            <div style="display: flex; align-items: center;">
+                <button id="dumpButton">Download Visible Logs</button>
+                <button id="copyButton">Copy Visible Logs</button>
+                <label for="logCountInput" style="margin-right: 10px;">Logs to fetch:</label>
+                <input type="number" id="logCountInput" value="100" min="1">
+            </div>
         </div>
-    </div>
         
         <!-- Logs Header with Search Bar -->
         <div id="utilityContainer">
-        <div style="display: flex; align-items: center;">
-            <input type="text" id="searchInput" placeholder="Search logs..." style="height: 1.5em; padding: 0.2em;"/>
+            <div style="display: flex; align-items: center;">
+                <input type="text" id="searchInput" placeholder="Search logs..." style="height: 1.5em; padding: 0.2em;"/>
+            </div>
         </div>
-    </div>
 
 
         <table id="logs-table">
@@ -81,397 +80,339 @@
             <tbody id="logs"></tbody>
         </table>
     </div>
+<!-- ... (HTML code remains the same up to the script tag) -->
 
+<script>
+    // JavaScript code updated to add 24 hours on either end of the date range
+    const logsElement = document.getElementById('logs');
+    const hashesList = document.getElementById('hashes');
+    const dumpButton = document.getElementById('dumpButton');
+    const searchInput = document.getElementById('searchInput');
+    const copyButton = document.getElementById('copyButton');
 
-    <script>
-        function getSliderPositions() {
-            const slider = $("#slider-range");
-            const values = slider.slider("values");
-            const minPosition = values[0];
-            const maxPosition = values[1];
+    let selectedHashes = new Set();
+    let selectedLevels = new Set(['INFO', 'WARN', 'ERROR', 'DEBUG']);
+    let hashColors = {};
 
-            return {
-                min: minPosition,
-                max: maxPosition
-            };
+    function getPastelColor(hashString) {
+        let hash = 0;
+        for (let i = 0; i < hashString.length; i++) {
+            const char = hashString.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
         }
 
-        function isSliderAtMaxRange() {
-            const slider = $("#slider-range");
-            const currentMax = slider.slider("values", 1);
-            const sliderMax = slider.slider("option", "max");
+        const hue = Math.abs(hash % 360);
+        const saturation = 65 + (hash % 20);
+        const lightness = 55 + (hash % 15);
 
-            return Math.abs(currentMax - sliderMax) < 1000;
-        }
+        return `hsla(${hue}, ${saturation}%, ${lightness}%, 0.9)`;
+    }
 
-        function updateCounterRange(newMin, newMax) {
-            const slider = $("#slider-range");
-            const oldMin = slider.slider("option", "min");
-            const oldMax = slider.slider("option", "max");
-
-            // Only update the slider's min and max if they have changed
-            if (newMin !== oldMin || newMax !== oldMax) {
-                slider.slider("option", "min", newMin);
-                slider.slider("option", "max", newMax);
-            }
-
-            // Don't update slider values or time inputs unless necessary
-        }
-
-        // Fetches the date range for the logs
-        async function fetchDateRange() {
-            try {
-                const response = await fetch('/api/date_range');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-
-                if (!data.min_date || !data.max_date) {
-                    throw new Error('Server returned invalid date range');
-                }
-
-                let minDate = new Date(data.min_date);
-                let maxDate = new Date(data.max_date);
-
-                if (isNaN(minDate.getTime()) || isNaN(maxDate.getTime())) {
-                    throw new Error('Invalid date parsed from server data');
-                }
-
-                // If the date range is too narrow, adjust minDate
-                if (maxDate.getTime() - minDate.getTime() < 3600000) { // Less than 1 hour apart
-                    minDate = new Date(maxDate.getTime() - 24 * 3600000); // Set minDate to 24 hours before maxDate
-                    console.warn('Date range too narrow, adjusting minDate to 24 hours before maxDate');
-                }
-
-                // Set the new date range
-                updateCounterRange(minDate.getTime(), maxDate.getTime());
-
-                return { minDate, maxDate };
-            } catch (error) {
-                console.error('Error in fetchDateRange:', error);
-                // Fallback to a default range if fetch fails
-                const fallbackMinDate = new Date(Date.now() - 60 * 1000); // 1 minago
-                const fallbackMaxDate = new Date();
-                console.log('Using fallback date range:', { fallbackMinDate, fallbackMaxDate });
-                return {
-                    minDate: fallbackMinDate,
-                    maxDate: fallbackMaxDate
-                };
-            }
-        }
-
-
-        function formatDateTime(date) {
-            return date.toISOString().slice(0, 19).replace('T', ' ');
-        }
-
-
-        let isProgrammaticUpdate = false;
-
-        function updateTimeInputs(start, end) {
-            isProgrammaticUpdate = true;
-            $("#startTime").val(formatDateTime(new Date(start)));
-            $("#endTime").val(formatDateTime(new Date(end)));
-            isProgrammaticUpdate = false;
-        }
-
-        $("#startTime, #endTime").on("change", function () {
-            if (isProgrammaticUpdate) return;
-            const startTime = new Date($("#startTime").val().replace(' ', 'T')).getTime();
-            const endTime = new Date($("#endTime").val().replace(' ', 'T')).getTime();
-
-            if (!isNaN(startTime) && !isNaN(endTime)) {
-                $("#slider-range").slider("values", [startTime, endTime]);
-            }
-        });
-
-        // Similarly, for slider updates
-        $("#slider-range").slider({
-            // ...
-            slide: function (event, ui) {
-                isProgrammaticUpdate = true;
-                updateTimeInputs(ui.values[0], ui.values[1]);
-                isProgrammaticUpdate = false;
-            }
-        });
-
-        // Initialize the date range picker
-        $(async function () {
-            try {
-                const { minDate, maxDate } = await fetchDateRange();
-
-                $("#slider-range").slider({
-                    range: true,
-                    min: minDate.getTime(),
-                    max: maxDate.getTime(),
-                    // 1 sec
-                    step: 1000,
-                    values: [minDate.getTime(), maxDate.getTime()],
-                    slide: function (event, ui) {
-                        updateTimeInputs(ui.values[0], ui.values[1]);
+    function fetchHashes() {
+        fetch('/api/hashes')
+            .then(response => response.json())
+            .then(hashes => {
+                hashesList.innerHTML = '';
+                hashes.forEach(hash => {
+                    if (!hashColors[hash]) {
+                        hashColors[hash] = getPastelColor(hash);
                     }
-                });
 
-                // Initialize date inputs
-                updateTimeInputs(minDate.getTime(), maxDate.getTime());
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <span class="hash-badge" style="background-color: ${hashColors[hash]};">&nbsp;</span>
+                        <span class="hash-text">${hash}</span>
+                    `;
 
-                // Add event listeners for manual input changes
-                $("#startTime, #endTime").on("change", function () {
-                    const startTime = new Date($("#startTime").val().replace(' ', 'T')).getTime();
-                    const endTime = new Date($("#endTime").val().replace(' ', 'T')).getTime();
-
-                    if (!isNaN(startTime) && !isNaN(endTime)) {
-                        $("#slider-range").slider("values", [startTime, endTime]);
+                    if (selectedHashes.has(hash)) {
+                        li.classList.add('selected');
                     }
+
+                    li.onclick = () => {
+                        toggleHashSelection(hash, li);
+                    };
+                    hashesList.appendChild(li);
                 });
-            } catch (error) {
-                console.error('Error initializing date range:', error);
-            }
-        });
+            });
+    }
 
-        setInterval(fetchDateRange, 1000); // Update the date range every second
-    </script>
-    <script>
-        // JavaScript code remains the same as in the original file
-        const logsElement = document.getElementById('logs');
-        const hashesList = document.getElementById('hashes');
-        const dumpButton = document.getElementById('dumpButton');
-        const searchInput = document.getElementById('searchInput');
-        const copyButton = document.getElementById('copyButton');
-
-        let selectedHashes = new Set();
-        let selectedLevels = new Set(['INFO', 'WARN', 'ERROR', 'DEBUG']);
-        let hashColors = {};
-        let minTimestamp, maxTimestamp;
-        let slider; // Declare slider variable globally
-
-        // Updated function to generate a pastel color
-        function getPastelColor(hashString) {
-            // Simple hash function
-            let hash = 0;
-            for (let i = 0; i < hashString.length; i++) {
-                const char = hashString.charCodeAt(i);
-                hash = ((hash << 5) - hash) + char;
-                hash = hash & hash; // Convert to 32-bit integer
-            }
-
-            // Use the hash to generate a hue value between 0 and 360
-            const hue = Math.abs(hash % 360);
-
-            // Use the hash to vary saturation and lightness slightly
-            const saturation = 65 + (hash % 20); // varies between 65% and 85%
-            const lightness = 55 + (hash % 15);  // varies between 55% and 70%
-
-            return `hsla(${hue}, ${saturation}%, ${lightness}%, 0.9)`;
+    function toggleHashSelection(hash, element) {
+        if (selectedHashes.has(hash)) {
+            selectedHashes.delete(hash);
+            element.classList.remove('selected');
+        } else {
+            selectedHashes.add(hash);
+            element.classList.add('selected');
         }
+        fetchLogs();
+    }
 
+    // Set up level filters
+    document.querySelectorAll('#levels .badge').forEach(badge => {
+        const level = badge.getAttribute('data-level');
 
-        // Fetch and display hashes
-        function fetchHashes() {
-            fetch('/api/hashes')
-                .then(response => response.json())
-                .then(hashes => {
-                    hashesList.innerHTML = ''; // Clear existing content
-                    hashes.forEach(hash => {
-                        if (!hashColors[hash]) {
-                            hashColors[hash] = getPastelColor(hash);
-                        }
-
-                        const li = document.createElement('li');
-                        li.innerHTML = `
-                            <span class="hash-badge" style="background-color: ${hashColors[hash]};">&nbsp;</span>
-                            <span class="hash-text">${hash}</span>
-                        `;
-
-                        if (selectedHashes.has(hash)) {
-                            li.classList.add('selected');
-                        }
-
-                        li.onclick = () => {
-                            toggleHashSelection(hash, li);
-                        };
-                        hashesList.appendChild(li);
-                    });
-                });
-        }
-
-
-        function toggleHashSelection(hash, element) {
-            if (selectedHashes.has(hash)) {
-                selectedHashes.delete(hash);
-                element.classList.remove('selected');
+        badge.onclick = () => {
+            if (selectedLevels.has(level)) {
+                selectedLevels.delete(level);
+                badge.classList.remove('selected');
             } else {
-                selectedHashes.add(hash);
-                element.classList.add('selected');
+                selectedLevels.add(level);
+                badge.classList.add('selected');
             }
             fetchLogs();
+        };
+    });
+    function fetchLogs() {
+    if (selectedHashes.size === 0) {
+        logsElement.innerHTML = '<tr><td colspan="4">No hashes selected.</td></tr>';
+        return;
+    }
+
+    const logCount = parseInt(document.getElementById('logCountInput').value) || 100;
+
+    const startTimeInput = $("#startTime").val();
+    const endTimeInput = $("#endTime").val();
+
+    // Adjust time strings to include seconds if necessary
+    const startTimeStr = startTimeInput.length === 16 ? startTimeInput + ':00' : startTimeInput;
+    const endTimeStr = endTimeInput.length === 16 ? endTimeInput + ':00' : endTimeInput;
+
+    // Create Date objects
+    const startTime = new Date(startTimeStr);
+    const endTime = new Date(endTimeStr);
+
+    // Adjust times to add 24 hours on either end
+    const adjustedStartTime = new Date(startTime.getTime() - 24 * 60 * 60 * 1000);
+    const adjustedEndTime = new Date(endTime.getTime() + 24 * 60 * 60 * 1000);
+
+    // Convert back to ISO strings
+    const adjustedStartTimeStr = adjustedStartTime.toISOString().slice(0, 19);
+    const adjustedEndTimeStr = adjustedEndTime.toISOString().slice(0, 19);
+
+    const promises = [];
+    selectedHashes.forEach(hash => {
+        const url = `/api/logs/${hash}?count=${logCount}&start=${encodeURIComponent(adjustedStartTimeStr)}&end=${encodeURIComponent(adjustedEndTimeStr)}`;
+        const promise = fetch(url)
+            .then(response => response.json())
+            .then(logs => logs);
+        promises.push(promise);
+    });
+
+    Promise.all(promises).then(results => {
+        logsElement.innerHTML = '';
+        const allLogs = results.flat();
+
+        const searchQuery = searchInput.value.toLowerCase();
+
+        const filteredLogs = allLogs.filter(log =>
+            (selectedLevels.size === 0 || selectedLevels.has(log.level)) &&
+            (!searchQuery || log.message.toLowerCase().includes(searchQuery))
+        );
+
+        // **Add this sorting step**
+        // Sort logs by timestamp in ascending order
+        //filteredLogs.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+        // If you prefer descending order (most recent first), use:
+        filteredLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        filteredLogs.forEach(log => {
+            const row = document.createElement('tr');
+
+            const date = new Date(log.timestamp);
+            const formattedTimestamp = date.toLocaleString(undefined, {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+
+            row.innerHTML = `
+                <td class="hash-column">
+                    <span class="hash-badge-table" style="background-color: ${hashColors[log.hash]};">${log.hash}</span>
+                </td>
+                <td class="timestamp-column">${formattedTimestamp}</td>
+                <td class="level-column">
+                    <span class="level-label level-${log.level}">${log.level}</span>
+                </td>
+                <td>${log.message}</td>
+            `;
+            logsElement.appendChild(row);
+        });
+    });
+}
+
+
+    // Copy visible logs to clipboard
+    copyButton.onclick = () => {
+        const rows = logsElement.querySelectorAll('tr');
+        if (rows.length === 0) {
+            alert('No logs to copy.');
+            return;
         }
 
-        // Set up level filters
-        document.querySelectorAll('#levels .badge').forEach(badge => {
-            const level = badge.getAttribute('data-level');
+        let clipboardContent = 'Hash\tLevel\tTimestamp\tMessage\n';
 
-            badge.onclick = () => {
-                if (selectedLevels.has(level)) {
-                    selectedLevels.delete(level);
-                    badge.classList.remove('selected');
-                } else {
-                    selectedLevels.add(level);
-                    badge.classList.add('selected');
-                }
-                fetchLogs();
-            };
+        rows.forEach(row => {
+            const cols = row.querySelectorAll('td');
+            const data = [];
+            cols.forEach(col => {
+                data.push(col.textContent.trim());
+            });
+            clipboardContent += data.join('\t') + '\n';
         });
 
-        function fetchLogs() {
-            if (selectedHashes.size === 0) {
-                logsElement.innerHTML = '<tr><td colspan="4">No hashes selected.</td></tr>';
-                return;
-            }
+        navigator.clipboard.writeText(clipboardContent).then(() => {
+            alert('Logs copied to clipboard.');
+        }, () => {
+            alert('Failed to copy logs to clipboard.');
+        });
+    };
 
-            // Get the log count from the input field
-            const logCount = parseInt(document.getElementById('logCountInput').value) || 100;
-            // Add one second to the end time to include the last second
-            const startTime = new Date($("#startTime").val().replace(' ', 'T')).getTime();
-            const endTime = new Date($("#endTime").val().replace(' ', 'T')).getTime() + 1000;
-
-            const promises = [];
-            selectedHashes.forEach(hash => {
-                const promise = fetch(`/api/logs/${hash}?count=${logCount}&start=${startTime}&end=${endTime}`)
-                    .then(response => response.json())
-                    .then(logs => logs);
-                promises.push(promise);
-            });
-
-            Promise.all(promises).then(results => {
-                logsElement.innerHTML = '';
-                const allLogs = results.flat();
-
-                const searchQuery = searchInput.value.toLowerCase();
-
-                const filteredLogs = allLogs.filter(log =>
-                    (selectedLevels.size === 0 || selectedLevels.has(log.level)) &&
-                    (!searchQuery || log.message.toLowerCase().includes(searchQuery))
-                );
-
-                filteredLogs.forEach(log => {
-                    const row = document.createElement('tr');
-
-                    const date = new Date(log.timestamp);
-                    const formattedTimestamp = date.toLocaleString(undefined, {
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                        hour12: false
-                    });
-
-                    row.innerHTML = `
-    <td class="hash-column">
-        <span class="hash-badge-table" style="background-color: ${hashColors[log.hash]};">${log.hash}</span>
-    </td>
-    <td class="timestamp-column">${formattedTimestamp}</td>
-    <td class="level-column">
-        <span class="level-label level-${log.level}">${log.level}</span>
-    </td>
-    <td>${log.message}</td>
-`;
-                    logsElement.appendChild(row);
-                });
-            });
+    // Dump visible logs to a file
+    dumpButton.onclick = () => {
+        const rows = logsElement.querySelectorAll('tr');
+        if (rows.length === 0) {
+            alert('No logs to download.');
+            return;
         }
 
-        // Copy visible logs to clipboard
-        copyButton.onclick = () => {
-            const rows = logsElement.querySelectorAll('tr');
-            if (rows.length === 0) {
-                alert('No logs to copy.');
-                return;
-            }
+        let csvContent = 'Hash,Level,Timestamp,Message\n';
 
-            let clipboardContent = 'Hash\tLevel\tTimestamp\tMessage\n';
-
-            rows.forEach(row => {
-                const cols = row.querySelectorAll('td');
-                const data = [];
-                cols.forEach(col => {
-                    data.push(col.textContent.trim());
-                });
-                clipboardContent += data.join('\t') + '\n';
-            });
-
-            navigator.clipboard.writeText(clipboardContent).then(() => {
-                alert('Logs copied to clipboard.');
-            }, () => {
-                alert('Failed to copy logs to clipboard.');
-            });
-        };
-
-        // Dump visible logs to a file
-        dumpButton.onclick = () => {
-            const rows = logsElement.querySelectorAll('tr');
-            if (rows.length === 0) {
-                alert('No logs to download.');
-                return;
-            }
-
-            let csvContent = 'Hash,Level,Message\n';
-
-            rows.forEach(row => {
-                const cols = row.querySelectorAll('td');
-                const data = [];
-                cols.forEach(col => data.push('"' + col.innerText.replace(/"/g, '""') + '"'));
-                csvContent += data.join(',') + '\n';
-            });
-
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-
-            const link = document.createElement('a');
-            link.setAttribute('href', url);
-            link.setAttribute('download', 'logs.csv');
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        };
-
-        // Handle search input
-        searchInput.addEventListener('input', () => {
-            fetchLogs();
+        rows.forEach(row => {
+            const cols = row.querySelectorAll('td');
+            const data = [];
+            cols.forEach(col => data.push('"' + col.innerText.replace(/"/g, '""') + '"'));
+            csvContent += data.join(',') + '\n';
         });
 
-        const darkModeCheckbox = document.getElementById('darkModeCheckbox');
-        const bodyElement = document.body;
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
 
-        // Load dark mode preference from localStorage
-        if (localStorage.getItem('darkMode') === 'enabled') {
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'logs.csv');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    // Handle search input
+    searchInput.addEventListener('input', () => {
+        fetchLogs();
+    });
+
+    const darkModeCheckbox = document.getElementById('darkModeCheckbox');
+    const bodyElement = document.body;
+
+    // Load dark mode preference from localStorage
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        bodyElement.classList.add('dark-mode');
+        darkModeCheckbox.checked = true;
+    }
+
+    darkModeCheckbox.addEventListener('change', () => {
+        if (darkModeCheckbox.checked) {
             bodyElement.classList.add('dark-mode');
-            darkModeCheckbox.checked = true;
+            localStorage.setItem('darkMode', 'enabled');
+        } else {
+            bodyElement.classList.remove('dark-mode');
+            localStorage.setItem('darkMode', 'disabled');
         }
+    });
 
-        darkModeCheckbox.addEventListener('change', () => {
-            if (darkModeCheckbox.checked) {
-                bodyElement.classList.add('dark-mode');
-                localStorage.setItem('darkMode', 'enabled');
-            } else {
-                bodyElement.classList.remove('dark-mode');
-                localStorage.setItem('darkMode', 'disabled');
+    // Fetch and set the date range for the inputs
+    async function fetchDateRange() {
+        try {
+            const response = await fetch('/api/date_range');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
+            const data = await response.json();
+
+            if (!data.min_date || !data.max_date) {
+                throw new Error('Server returned invalid date range');
+            }
+
+            let minDate = new Date(data.min_date);
+            let maxDate = new Date(data.max_date);
+
+            if (isNaN(minDate.getTime()) || isNaN(maxDate.getTime())) {
+                throw new Error('Invalid date parsed from server data');
+            }
+
+            // Adjust minDate if the range is too narrow
+            if (maxDate.getTime() - minDate.getTime() < 3600000) {
+                minDate = new Date(maxDate.getTime() - 24 * 3600000);
+                console.warn('Date range too narrow, adjusting minDate to 24 hours before maxDate');
+            }
+
+            const minDateStr = minDate.toISOString().slice(0, 16);
+            const maxDateStr = maxDate.toISOString().slice(0, 16);
+
+            // Set min and max attributes
+            $("#startTime").attr('min', minDateStr);
+            $("#startTime").attr('max', maxDateStr);
+            $("#endTime").attr('min', minDateStr);
+            $("#endTime").attr('max', maxDateStr);
+
+            // Set initial values if not already set
+            if (!$("#startTime").val()) {
+                $("#startTime").val(minDateStr);
+            }
+            if (!$("#endTime").val()) {
+                $("#endTime").val(maxDateStr);
+            }
+
+        } catch (error) {
+            console.error('Error in fetchDateRange:', error);
+            const fallbackMinDate = new Date(Date.now() - 60 * 1000);
+            const fallbackMaxDate = new Date();
+            const minDateStr = fallbackMinDate.toISOString().slice(0, 16);
+            const maxDateStr = fallbackMaxDate.toISOString().slice(0, 16);
+
+            $("#startTime").attr('min', minDateStr);
+            $("#startTime").attr('max', maxDateStr);
+            $("#endTime").attr('min', minDateStr);
+            $("#endTime").attr('max', maxDateStr);
+
+            if (!$("#startTime").val()) {
+                $("#startTime").val(minDateStr);
+            }
+            if (!$("#endTime").val()) {
+                $("#endTime").val(maxDateStr);
+            }
+        }
+    }
+
+    // Initialize date inputs
+    $(async function () {
+        await fetchDateRange();
+
+        // Fetch logs when date inputs change
+        $("#startTime, #endTime").on("change", function () {
+            fetchLogs();
         });
 
-        // Initial fetch of hashes
-        fetchHashes();
+        // Initial fetch of logs
+        fetchLogs();
+    });
 
-        // Refresh hashes every 5 seconds
-        setInterval(fetchHashes, 3000);
+    // Initial fetch of hashes
+    fetchHashes();
 
-        setInterval(fetchLogs, 1000);
+    // Refresh hashes every 3 seconds
+    setInterval(fetchHashes, 3000);
 
-    </script>
+    // Refresh logs every 1 second
+    setInterval(fetchLogs, 1000);
+
+</script>
+
 </body>
-
 </html>
