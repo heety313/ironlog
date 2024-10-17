@@ -17,6 +17,7 @@ use sqlx::{SqlitePool, sqlite::SqlitePoolOptions, Row};
 use std::fs;
 use chrono::{Utc, Duration};
 use clap::Parser;
+use std::sync::Arc;
 
 static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/static");
 
@@ -37,9 +38,27 @@ fn default_timestamp() -> String {
     Utc::now().to_rfc3339()
 }
 
+async fn optimize_sqlite(pool: &SqlitePool) {
+    sqlx::query("PRAGMA journal_mode = WAL;")
+        .execute(pool)
+        .await
+        .expect("Failed to set journal_mode");
+
+    sqlx::query("PRAGMA synchronous = NORMAL;")
+        .execute(pool)
+        .await
+        .expect("Failed to set synchronous mode");
+
+    sqlx::query("PRAGMA cache_size = -64000;") // 64MB cache
+        .execute(pool)
+        .await
+        .expect("Failed to set cache size");
+}
+
 #[rocket::main]
 async fn main() {
     let config = Config::parse();
+    let config_arc = Arc::new(config.clone()); // Create an Arc<Config> for sharing
 
     // Database file path
     let db_path = &config.log_db;
@@ -76,20 +95,13 @@ async fn main() {
     .await
     .expect("Failed to create logs table.");
 
-    // Start TCP listener in a separate task
-    let db_pool_clone = db_pool.clone();
-    let config_clone = config.clone();
-    tokio::spawn(async move {
-        let listener_addr = format!("{}:{}", config_clone.tcp_listener_ip, config_clone.tcp_listener_port);
-        let listener = TcpListener::bind(&listener_addr).await.unwrap();
-        println!("Log server is running on {}", listener_addr);
+    // Optimize SQLite for performance
+    optimize_sqlite(&db_pool).await;
 
-        loop {
-            let (socket, _) = listener.accept().await.unwrap();
-            let db_pool = db_pool_clone.clone();
-            let config = config_clone.clone();
-            tokio::spawn(client_handler::handle_client(socket, db_pool, config));
-        }
+    // Start the log handler in a separate task
+    let db_pool_clone = db_pool.clone();
+    tokio::spawn(async move {
+        client_handler::start_log_handler(db_pool_clone, config_arc).await;
     });
 
     // Launch the Rocket server
@@ -100,7 +112,7 @@ async fn main() {
 
     rocket::custom(figment)
         .manage(db_pool)
-        .manage(config.clone())
+        .manage(config) // Manage the original Config, not the Arc<Config>
         .mount(
             "/api",
             routes![
@@ -114,7 +126,8 @@ async fn main() {
         )
         .mount("/", routes![index, serve_file])
         .launch()
-        .await.unwrap();
+        .await
+        .unwrap();
 }
 
 pub fn truncate_string(s: &str, max_bytes: usize) -> String {
