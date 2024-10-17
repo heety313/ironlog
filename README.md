@@ -49,7 +49,7 @@ IronLog is a high-performance, real-time logging solution for Rust applications.
 2. Add IronLog to your `Cargo.toml`:
    ```toml
    [dependencies]
-   ironlog = "0.1.1"
+   ironlog = "0.2.6"
    ```
 
 3. Initialize IronLog in your main.rs:
