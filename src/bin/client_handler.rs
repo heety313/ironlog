@@ -4,14 +4,12 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::{TcpStream, TcpListener};
 use sqlx::{SqlitePool, Row};
 use serde_json;
-use chrono::Utc;
 use crate::{LogMessage, Config, truncate_string};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 use std::collections::{HashMap, VecDeque};
 use tokio::time::{interval, Duration};
-use sqlx::sqlite::SqliteQueryResult;
 
 struct LogStats {
     hash_set: HashMap<String, usize>,
@@ -161,7 +159,7 @@ async fn database_writer(
     db_pool: SqlitePool,
     config: Arc<Config>,
 ) {
-    let mut log_queue = LogQueue::new(10000);
+    let log_queue = LogQueue::new(10000);
     let mut batch = Vec::with_capacity(1000);
 
     while let Some(log_message) = log_receiver.recv().await {
