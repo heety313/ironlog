@@ -2,8 +2,8 @@
 extern crate rocket;
 
 use ironlog::config::Config;
-
-mod client_handler;
+use ironlog::types::LogMessage;
+use ironlog::client_handler;
 
 use rocket::http::ContentType;
 use rocket::form::FromForm;
@@ -17,20 +17,9 @@ use chrono::{Utc, Duration};
 use clap::Parser;
 use std::sync::Arc;
 
+
 static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/static");
 
-#[derive(Serialize, Deserialize, Clone, sqlx::FromRow)]
-pub struct LogMessage {
-    level: String,
-    message: String,
-    target: String,
-    module_path: Option<String>,
-    file: Option<String>,
-    line: Option<i64>, // SQLite INTEGER maps to i64
-    hash: String,
-    #[serde(default = "default_timestamp")]
-    timestamp: String,
-}
 
 fn default_timestamp() -> String {
     Utc::now().to_rfc3339()

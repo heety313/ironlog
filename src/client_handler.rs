@@ -4,12 +4,13 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::{TcpStream, TcpListener};
 use sqlx::SqlitePool;
 use serde_json;
-use crate::{LogMessage, Config, truncate_string};
+use crate::config::Config;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 use std::collections::{HashMap, VecDeque};
 use tokio::time::{interval, Duration};
+use crate::types::LogMessage;
 
 struct LogStats {
     hash_set: HashMap<String, usize>,
@@ -37,6 +38,18 @@ impl LogQueue {
         };
         self.queue.push_back(log);
         dropped
+    }
+}
+
+pub fn truncate_string(s: &str, max_bytes: usize) -> String {
+    if s.len() <= max_bytes {
+        s.to_string()
+    } else {
+        let mut end = max_bytes;
+        while !s.is_char_boundary(end) && end > 0 {
+            end -= 1;
+        }
+        s[..end].to_string()
     }
 }
 

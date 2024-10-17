@@ -67,3 +67,5 @@ impl log::Log for TcpLogger {
 }
 
 pub mod config;
+pub mod types;
+pub mod client_handler;

@@ -6,6 +6,7 @@ license = "MIT"
 repository = "https://github.com/heety313/ironlog"
 description = "A web logger for multi-node system logging"
 build = "build.rs"
+default-run = "ironlog"
 
 [lib]
 name = "ironlog"
