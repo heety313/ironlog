@@ -65,6 +65,9 @@ IronLog is a high-performance, real-time logging solution for Rust applications.
 
 4. Open your browser and navigate to `http://127.0.0.1:8000` to view the logs.
 
+## Companion & Client Libraries
+[ESP32 Client Library (Arduino & Platformio)](https://github.com/heety313/ironlog-esp32-pio)
+
 ## Usage
 
 IronLog seamlessly integrates with Rust's standard logging facade. Use it just like you would use `log`:
