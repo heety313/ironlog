@@ -2,7 +2,7 @@
 
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::{TcpStream, TcpListener};
-use sqlx::{SqlitePool, Row};
+use sqlx::SqlitePool;
 use serde_json;
 use crate::{LogMessage, Config, truncate_string};
 use std::sync::atomic::{AtomicUsize, Ordering};
