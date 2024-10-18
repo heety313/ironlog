@@ -68,8 +68,8 @@ IronLog is a high-performance, real-time logging solution for Rust applications.
 
 
 ## Companion & Client Libraries
-[ESP32 Client Library (Arduino & Platformio)](https://github.com/heety313/ironlog-esp32-pio)
-[Linux SystemD/journalctl Log to browser](https://github.com/heety313/ironlog-linux-systemd)
+* [ESP32 Client Library (Arduino & Platformio)](https://github.com/heety313/ironlog-esp32-pio)
+* [Linux SystemD/journalctl Log to browser](https://github.com/heety313/ironlog-linux-systemd)
 
 ## Independant Logging
 
