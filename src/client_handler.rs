@@ -135,7 +135,6 @@ pub async fn handle_client(
     while let Ok(Some(line)) = lines.next_line().await {
         if let Ok(mut log_message) = serde_json::from_str::<LogMessage>(&line) {
             let index = LOG_INDEX.fetch_add(1, Ordering::SeqCst);
-            println!("Received log #{}", index);
 
             log_message.message = truncate_string(&log_message.message, config.max_log_length);
 
@@ -159,8 +158,6 @@ pub async fn handle_client(
                 // Send the log message to the database writer
                 if let Err(e) = log_sender.send(log_message.clone()).await {
                     eprintln!("Failed to send log message to database writer: {}", e);
-                } else {
-                    println!("Log message sent to database writer: {}", log_message.message);
                 }
             }
         }
@@ -208,7 +205,6 @@ async fn write_logs_to_database(logs: &[LogMessage], db_pool: &SqlitePool, confi
     }
 
     transaction.commit().await.expect("Failed to commit transaction");
-    println!("Wrote {} logs to database", logs.len());
 }
 
 async fn update_database(db_pool: &SqlitePool, log_stats: &Arc<Mutex<LogStats>>, config: &Config) {
@@ -271,7 +267,6 @@ async fn perform_log_count_checks(db_pool: &SqlitePool, config: &Config) {
             .await
             .expect("Failed to delete old logs.");
 
-            println!("Deleted {} old logs for hash: {}", logs_to_delete, hash);
         }
     }
 }

@@ -2,12 +2,12 @@ use log::{Metadata, Record};
 use serde::Serialize;
 use std::io::Write;
 use std::net::TcpStream;
-use std::sync::Mutex;
-use chrono::Utc; // Add this import
+use std::sync::{Arc, Mutex};
+use chrono::Utc;
 
 #[derive(Serialize)]
 struct LogMessage<'a> {
-    timestamp: String, // Add this field
+    timestamp: String,
     level: String,
     message: String,
     target: &'a str,
@@ -20,7 +20,7 @@ struct LogMessage<'a> {
 pub struct TcpLogger {
     server_addr: String,
     hash: String,
-    stream: Mutex<TcpStream>,
+    stream: Arc<Mutex<TcpStream>>,
 }
 
 impl TcpLogger {
@@ -29,11 +29,56 @@ impl TcpLogger {
         let logger = TcpLogger {
             server_addr: server_addr.to_string(),
             hash: hash.to_string(),
-            stream: Mutex::new(stream),
+            stream: Arc::new(Mutex::new(stream)),
         };
         log::set_boxed_logger(Box::new(logger))?;
         log::set_max_level(level);
         Ok(())
+    }
+
+    pub fn new(server_addr: &str, hash: &str, _use_system_logger: bool) -> Result<Self, std::io::Error> {
+        let stream = TcpStream::connect(server_addr)?;
+        Ok(TcpLogger {
+            server_addr: server_addr.to_string(),
+            hash: hash.to_string(),
+            stream: Arc::new(Mutex::new(stream)),
+        })
+    }
+
+    pub fn info(&self, message: &str) {
+        self.log_message(log::Level::Info, message);
+    }
+
+    pub fn error(&self, message: &str) {
+        self.log_message(log::Level::Error, message);
+    }
+
+    pub fn debug(&self, message: &str) {
+        self.log_message(log::Level::Debug, message);
+    }
+
+    pub fn warn(&self, message: &str) {
+        self.log_message(log::Level::Warn, message);
+    }
+
+    fn log_message(&self, level: log::Level, message: &str) {
+        let log_message = LogMessage {
+            timestamp: Utc::now().to_rfc3339(),
+            level: level.to_string(),
+            message: message.to_string(),
+            target: "independent_logger",
+            module_path: None,
+            file: None,
+            line: None,
+            hash: self.hash.clone(),
+        };
+
+        if let Ok(json) = serde_json::to_string(&log_message) {
+            let mut stream = self.stream.lock().unwrap();
+            if let Err(e) = writeln!(stream, "{}", json) {
+                eprintln!("Failed to send log: {}", e);
+            }
+        }
     }
 }
 
@@ -45,7 +90,7 @@ impl log::Log for TcpLogger {
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
             let log_message = LogMessage {
-                timestamp: Utc::now().to_rfc3339(), // Add this line
+                timestamp: Utc::now().to_rfc3339(),
                 level: record.level().to_string(),
                 message: record.args().to_string(),
                 target: record.target(),
@@ -67,5 +112,5 @@ impl log::Log for TcpLogger {
 }
 
 pub mod config;
-pub mod types;
 pub mod client_handler;
+pub mod types;
