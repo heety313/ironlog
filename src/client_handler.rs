@@ -1,16 +1,16 @@
 // client_handler.rs
 
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::net::{TcpStream, TcpListener};
-use sqlx::SqlitePool;
-use serde_json;
 use crate::config::Config;
+use crate::types::LogMessage;
+use serde_json;
+use sqlx::SqlitePool;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use tokio::sync::{Mutex, mpsc};
-use std::collections::{HashMap, VecDeque};
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::{mpsc, Mutex};
 use tokio::time::{interval, Duration};
-use crate::types::LogMessage;
 
 struct LogStats {
     hash_set: HashMap<String, usize>,
@@ -62,13 +62,15 @@ pub async fn start_log_handler(db_pool: SqlitePool, config: Arc<Config>) {
     // Initialize log_stats with existing data from the database
     {
         let mut stats = log_stats.lock().await;
-        let hashes: Vec<(String, i64)> = sqlx::query_as("
+        let hashes: Vec<(String, i64)> = sqlx::query_as(
+            "
             SELECT hash, COUNT(*) as count
             FROM logs
             GROUP BY hash
             ORDER BY count DESC
             LIMIT ?
-        ")
+        ",
+        )
         .bind(config.max_hashes as i64)
         .fetch_all(&db_pool)
         .await
@@ -105,11 +107,16 @@ pub async fn start_log_handler(db_pool: SqlitePool, config: Arc<Config>) {
 
     // Start TCP listener
     let listener_addr = format!("{}:{}", config.tcp_listener_ip, config.tcp_listener_port);
-    let listener = TcpListener::bind(&listener_addr).await.expect("Failed to bind TCP listener");
+    let listener = TcpListener::bind(&listener_addr)
+        .await
+        .expect("Failed to bind TCP listener");
     println!("Log server is running on {}", listener_addr);
 
     loop {
-        let (socket, _) = listener.accept().await.expect("Failed to accept connection");
+        let (socket, _) = listener
+            .accept()
+            .await
+            .expect("Failed to accept connection");
         let db_pool = db_pool.clone();
         let config = Arc::clone(&config);
         let log_stats = Arc::clone(&log_stats);
@@ -129,7 +136,7 @@ pub async fn handle_client(
 ) {
     let reader = BufReader::new(socket);
     let mut lines = reader.lines();
-    
+
     static LOG_INDEX: AtomicUsize = AtomicUsize::new(0);
 
     while let Ok(Some(line)) = lines.next_line().await {
@@ -187,10 +194,12 @@ async fn write_logs_to_database(logs: &[LogMessage], db_pool: &SqlitePool, confi
     let mut transaction = db_pool.begin().await.expect("Failed to begin transaction");
 
     for log in logs {
-        sqlx::query("
+        sqlx::query(
+            "
             INSERT INTO logs (level, message, target, module_path, file, line, hash, timestamp)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ")
+        ",
+        )
         .bind(&log.level)
         .bind(&log.message)
         .bind(&log.target)
@@ -204,7 +213,10 @@ async fn write_logs_to_database(logs: &[LogMessage], db_pool: &SqlitePool, confi
         .expect("Failed to insert log into database.");
     }
 
-    transaction.commit().await.expect("Failed to commit transaction");
+    transaction
+        .commit()
+        .await
+        .expect("Failed to commit transaction");
 }
 
 async fn update_database(db_pool: &SqlitePool, log_stats: &Arc<Mutex<LogStats>>, config: &Config) {
@@ -217,13 +229,15 @@ async fn update_database(db_pool: &SqlitePool, log_stats: &Arc<Mutex<LogStats>>,
         stats.total_hashes = 0;
 
         // Repopulate with current hashes from the database
-        let hashes: Vec<(String, i64)> = sqlx::query_as("
+        let hashes: Vec<(String, i64)> = sqlx::query_as(
+            "
             SELECT hash, COUNT(*) as count
             FROM logs
             GROUP BY hash
             ORDER BY count DESC
             LIMIT ?
-        ")
+        ",
+        )
         .bind(config.max_hashes as i64)
         .fetch_all(db_pool)
         .await
@@ -251,22 +265,23 @@ async fn perform_log_count_checks(db_pool: &SqlitePool, config: &Config) {
 
         if log_count > config.max_log_count as i64 {
             let logs_to_delete = log_count - config.max_log_count as i64;
-            
-            sqlx::query("
-                DELETE FROM logs 
+
+            sqlx::query(
+                "
+                DELETE FROM logs
                 WHERE id IN (
-                    SELECT id FROM logs 
-                    WHERE hash = ? 
-                    ORDER BY timestamp ASC 
+                    SELECT id FROM logs
+                    WHERE hash = ?
+                    ORDER BY timestamp ASC
                     LIMIT ?
                 )
-            ")
+            ",
+            )
             .bind(&hash)
             .bind(logs_to_delete)
             .execute(db_pool)
             .await
             .expect("Failed to delete old logs.");
-
         }
     }
 }

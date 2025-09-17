@@ -1,9 +1,9 @@
+use chrono::Utc;
 use log::{Metadata, Record};
 use serde::Serialize;
 use std::io::Write;
 use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
-use chrono::Utc;
 
 #[derive(Serialize)]
 struct LogMessage<'a> {
@@ -24,7 +24,11 @@ pub struct TcpLogger {
 }
 
 impl TcpLogger {
-    pub fn init(server_addr: &str, hash: &str, level: log::LevelFilter) -> Result<(), log::SetLoggerError> {
+    pub fn init(
+        server_addr: &str,
+        hash: &str,
+        level: log::LevelFilter,
+    ) -> Result<(), log::SetLoggerError> {
         let stream = TcpStream::connect(server_addr).expect("Could not connect to log server");
         let logger = TcpLogger {
             server_addr: server_addr.to_string(),
@@ -36,7 +40,11 @@ impl TcpLogger {
         Ok(())
     }
 
-    pub fn new(server_addr: &str, hash: &str, _use_system_logger: bool) -> Result<Self, std::io::Error> {
+    pub fn new(
+        server_addr: &str,
+        hash: &str,
+        _use_system_logger: bool,
+    ) -> Result<Self, std::io::Error> {
         let stream = TcpStream::connect(server_addr)?;
         Ok(TcpLogger {
             server_addr: server_addr.to_string(),
@@ -111,6 +119,6 @@ impl log::Log for TcpLogger {
     fn flush(&self) {}
 }
 
-pub mod config;
 pub mod client_handler;
+pub mod config;
 pub mod types;

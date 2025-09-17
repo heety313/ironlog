@@ -1,13 +1,5 @@
-use rocket::http::ContentType;
-use rocket::form::FromForm;
-use rocket::serde::json::Json;
-use include_dir::{include_dir, Dir};
-use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
-use sqlx::{SqlitePool, sqlite::SqlitePoolOptions, Row};
-use std::fs;
-use std::sync::Arc;
 use chrono;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, sqlx::FromRow)]
 pub struct LogMessage {

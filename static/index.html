@@ -43,23 +43,30 @@
 
         <div id="utilityContainer">
             <div id="timeInputs">
-                <label for="startTime">Start Time:</label>
-                <input type="datetime-local" id="startTime" name="startTime">
-                <label for="endTime">End Time:</label>
-                <input type="datetime-local" id="endTime" name="endTime">
+                <div>
+                    <label for="startTime">Start Time:</label>
+                    <input type="datetime-local" id="startTime" name="startTime">
+                </div>
+                <div>
+                    <label for="endTime">End Time:</label>
+                    <input type="datetime-local" id="endTime" name="endTime">
+                </div>
             </div>
         </div>
 
-        <!-- Dump Logs Button -->
+        <!-- Action Buttons -->
         <div id="utilityContainer">
-            <div style="display: flex; align-items: center;">
+            <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px;">
                 <button id="dumpButton">Download Visible Logs</button>
                 <button id="copyButton">Copy Visible Logs</button>
+                <button id="deleteSelectedButton" class="danger-button">Delete Selected Hash Logs</button>
+                <button id="deleteTimeRangeButton" class="danger-button">Delete Time Range</button>
+                <button id="purgeAllButton" class="danger-button">Purge All Logs</button>
                 <label for="logCountInput" style="margin-right: 10px;">Logs to fetch:</label>
                 <input type="number" id="logCountInput" value="100" min="1">
             </div>
         </div>
-        
+
         <!-- Logs Header with Search Bar -->
         <div id="utilityContainer">
             <div style="display: flex; align-items: center;">
@@ -80,15 +87,17 @@
             <tbody id="logs"></tbody>
         </table>
     </div>
-<!-- ... (HTML code remains the same up to the script tag) -->
 
 <script>
-    // JavaScript code updated to add 24 hours on either end of the date range
+    // JavaScript code with fixed time handling and delete functionality
     const logsElement = document.getElementById('logs');
     const hashesList = document.getElementById('hashes');
     const dumpButton = document.getElementById('dumpButton');
     const searchInput = document.getElementById('searchInput');
     const copyButton = document.getElementById('copyButton');
+    const deleteSelectedButton = document.getElementById('deleteSelectedButton');
+    const deleteTimeRangeButton = document.getElementById('deleteTimeRangeButton');
+    const purgeAllButton = document.getElementById('purgeAllButton');
 
     let selectedHashes = new Set();
     let selectedLevels = new Set(['INFO', 'WARN', 'ERROR', 'DEBUG']);
@@ -163,89 +172,100 @@
             fetchLogs();
         };
     });
-    function fetchLogs() {
-    if (selectedHashes.size === 0) {
-        logsElement.innerHTML = '<tr><td colspan="4">No hashes selected.</td></tr>';
-        return;
+
+    function formatDateTimeForAPI(dateTimeLocalValue) {
+        if (!dateTimeLocalValue) return null;
+
+        // Convert datetime-local to ISO string
+        const date = new Date(dateTimeLocalValue);
+        return date.toISOString();
     }
 
-    const logCount = parseInt(document.getElementById('logCountInput').value) || 100;
+    function fetchLogs() {
+        if (selectedHashes.size === 0) {
+            logsElement.innerHTML = '<tr><td colspan="4">No hashes selected.</td></tr>';
+            return;
+        }
 
-    const startTimeInput = $("#startTime").val();
-    const endTimeInput = $("#endTime").val();
+        const logCount = parseInt(document.getElementById('logCountInput').value) || 100;
 
-    // Adjust time strings to include seconds if necessary
-    const startTimeStr = startTimeInput.length === 16 ? startTimeInput + ':00' : startTimeInput;
-    const endTimeStr = endTimeInput.length === 16 ? endTimeInput + ':00' : endTimeInput;
+        const startTimeInput = $("#startTime").val();
+        const endTimeInput = $("#endTime").val();
 
-    // Create Date objects
-    const startTime = new Date(startTimeStr);
-    const endTime = new Date(endTimeStr);
+        const promises = [];
+        selectedHashes.forEach(hash => {
+            let url = `/api/logs/${hash}?count=${logCount}`;
 
-    // Adjust times to add 24 hours on either end
-    const adjustedStartTime = new Date(startTime.getTime() - 24 * 60 * 60 * 1000);
-    const adjustedEndTime = new Date(endTime.getTime() + 24 * 60 * 60 * 1000);
+            // Add time filters if they exist
+            if (startTimeInput) {
+                const startTime = formatDateTimeForAPI(startTimeInput);
+                if (startTime) {
+                    url += `&start=${encodeURIComponent(startTime)}`;
+                }
+            }
 
-    // Convert back to ISO strings
-    const adjustedStartTimeStr = adjustedStartTime.toISOString().slice(0, 19);
-    const adjustedEndTimeStr = adjustedEndTime.toISOString().slice(0, 19);
+            if (endTimeInput) {
+                const endTime = formatDateTimeForAPI(endTimeInput);
+                if (endTime) {
+                    url += `&end=${encodeURIComponent(endTime)}`;
+                }
+            }
 
-    const promises = [];
-    selectedHashes.forEach(hash => {
-        const url = `/api/logs/${hash}?count=${logCount}&start=${encodeURIComponent(adjustedStartTimeStr)}&end=${encodeURIComponent(adjustedEndTimeStr)}`;
-        const promise = fetch(url)
-            .then(response => response.json())
-            .then(logs => logs);
-        promises.push(promise);
-    });
-
-    Promise.all(promises).then(results => {
-        logsElement.innerHTML = '';
-        const allLogs = results.flat();
-
-        const searchQuery = searchInput.value.toLowerCase();
-
-        const filteredLogs = allLogs.filter(log =>
-            (selectedLevels.size === 0 || selectedLevels.has(log.level)) &&
-            (!searchQuery || log.message.toLowerCase().includes(searchQuery))
-        );
-
-        // **Add this sorting step**
-        // Sort logs by timestamp in ascending order
-        //filteredLogs.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
-        // If you prefer descending order (most recent first), use:
-        filteredLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-        filteredLogs.forEach(log => {
-            const row = document.createElement('tr');
-
-            const date = new Date(log.timestamp);
-            const formattedTimestamp = date.toLocaleString(undefined, {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
-            });
-
-            row.innerHTML = `
-                <td class="hash-column">
-                    <span class="hash-badge-table" style="background-color: ${hashColors[log.hash]};">${log.hash}</span>
-                </td>
-                <td class="timestamp-column">${formattedTimestamp}</td>
-                <td class="level-column">
-                    <span class="level-label level-${log.level}">${log.level}</span>
-                </td>
-                <td>${log.message}</td>
-            `;
-            logsElement.appendChild(row);
+            const promise = fetch(url)
+                .then(response => response.json())
+                .then(logs => logs)
+                .catch(error => {
+                    console.error('Error fetching logs for hash', hash, ':', error);
+                    return [];
+                });
+            promises.push(promise);
         });
-    });
-}
 
+        Promise.all(promises).then(results => {
+            logsElement.innerHTML = '';
+            const allLogs = results.flat();
+
+            const searchQuery = searchInput.value.toLowerCase();
+
+            const filteredLogs = allLogs.filter(log =>
+                (selectedLevels.size === 0 || selectedLevels.has(log.level)) &&
+                (!searchQuery || log.message.toLowerCase().includes(searchQuery))
+            );
+
+            // Sort logs by timestamp in descending order (most recent first)
+            filteredLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            filteredLogs.forEach(log => {
+                const row = document.createElement('tr');
+
+                const date = new Date(log.timestamp);
+                const formattedTimestamp = date.toLocaleString(undefined, {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+
+                row.innerHTML = `
+                    <td class="hash-column">
+                        <span class="hash-badge-table" style="background-color: ${hashColors[log.hash]};">${log.hash}</span>
+                    </td>
+                    <td class="timestamp-column">${formattedTimestamp}</td>
+                    <td class="level-column">
+                        <span class="level-label level-${log.level}">${log.level}</span>
+                    </td>
+                    <td>${log.message}</td>
+                `;
+                logsElement.appendChild(row);
+            });
+        }).catch(error => {
+            console.error('Error fetching logs:', error);
+            logsElement.innerHTML = '<tr><td colspan="4">Error loading logs. Check console for details.</td></tr>';
+        });
+    }
 
     // Copy visible logs to clipboard
     copyButton.onclick = () => {
@@ -302,6 +322,119 @@
         document.body.removeChild(link);
     };
 
+    // Delete functionality
+    deleteSelectedButton.onclick = async () => {
+        if (selectedHashes.size === 0) {
+            alert('No hashes selected.');
+            return;
+        }
+
+        const hashList = Array.from(selectedHashes).join(', ');
+        if (!confirm(`Are you sure you want to delete all logs for these hashes?\n\n${hashList}\n\nThis action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            const promises = Array.from(selectedHashes).map(hash =>
+                fetch(`/api/delete_logs/${hash}`, { method: 'DELETE' })
+                    .then(response => response.json())
+            );
+
+            const results = await Promise.all(promises);
+
+            let successCount = 0;
+            let errorCount = 0;
+
+            results.forEach((result, index) => {
+                if (result.success) {
+                    successCount++;
+                } else {
+                    errorCount++;
+                    console.error('Delete error for hash', Array.from(selectedHashes)[index], ':', result.message);
+                }
+            });
+
+            if (successCount > 0) {
+                alert(`Successfully deleted logs for ${successCount} hash(es).${errorCount > 0 ? ` ${errorCount} failed.` : ''}`);
+                // Clear selected hashes and refresh
+                selectedHashes.clear();
+                fetchHashes();
+                fetchLogs();
+            } else {
+                alert('Failed to delete any logs. Check console for details.');
+            }
+        } catch (error) {
+            console.error('Delete error:', error);
+            alert('Error occurred while deleting logs.');
+        }
+    };
+
+    deleteTimeRangeButton.onclick = async () => {
+        const startTimeInput = $("#startTime").val();
+        const endTimeInput = $("#endTime").val();
+
+        if (!startTimeInput || !endTimeInput) {
+            alert('Please select both start and end times.');
+            return;
+        }
+
+        const startTime = formatDateTimeForAPI(startTimeInput);
+        const endTime = formatDateTimeForAPI(endTimeInput);
+
+        if (!confirm(`Are you sure you want to delete all logs between:\n\n${new Date(startTime).toLocaleString()} and ${new Date(endTime).toLocaleString()}\n\nThis action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/delete_time_range', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    start_time: startTime,
+                    end_time: endTime
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                alert(`Successfully deleted ${result.deleted_count} log(s).`);
+                fetchHashes();
+                fetchLogs();
+            } else {
+                alert(`Failed to delete logs: ${result.message}`);
+            }
+        } catch (error) {
+            console.error('Delete time range error:', error);
+            alert('Error occurred while deleting logs.');
+        }
+    };
+
+    purgeAllButton.onclick = async () => {
+        if (!confirm('Are you sure you want to DELETE ALL LOGS?\n\nThis will permanently remove every log in the database.\n\nThis action cannot be undone.')) {
+            return;
+        }
+
+        if (!confirm('This is your final warning. ALL LOGS WILL BE PERMANENTLY DELETED.\n\nClick OK to proceed or Cancel to abort.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/purge_logs', { method: 'POST' });
+            const result = await response.json();
+
+            alert(result);
+            selectedHashes.clear();
+            fetchHashes();
+            fetchLogs();
+        } catch (error) {
+            console.error('Purge error:', error);
+            alert('Error occurred while purging logs.');
+        }
+    };
+
     // Handle search input
     searchInput.addEventListener('input', () => {
         fetchLogs();
@@ -326,74 +459,8 @@
         }
     });
 
-    // Fetch and set the date range for the inputs
-    async function fetchDateRange() {
-        try {
-            const response = await fetch('/api/date_range');
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-
-            if (!data.min_date || !data.max_date) {
-                throw new Error('Server returned invalid date range');
-            }
-
-            let minDate = new Date(data.min_date);
-            let maxDate = new Date(data.max_date);
-
-            if (isNaN(minDate.getTime()) || isNaN(maxDate.getTime())) {
-                throw new Error('Invalid date parsed from server data');
-            }
-
-            // Adjust minDate if the range is too narrow
-            if (maxDate.getTime() - minDate.getTime() < 3600000) {
-                minDate = new Date(maxDate.getTime() - 24 * 3600000);
-                console.warn('Date range too narrow, adjusting minDate to 24 hours before maxDate');
-            }
-
-            const minDateStr = minDate.toISOString().slice(0, 16);
-            const maxDateStr = maxDate.toISOString().slice(0, 16);
-
-            // Set min and max attributes
-            $("#startTime").attr('min', minDateStr);
-            $("#startTime").attr('max', maxDateStr);
-            $("#endTime").attr('min', minDateStr);
-            $("#endTime").attr('max', maxDateStr);
-
-            // Set initial values if not already set
-            if (!$("#startTime").val()) {
-                $("#startTime").val(minDateStr);
-            }
-            if (!$("#endTime").val()) {
-                $("#endTime").val(maxDateStr);
-            }
-
-        } catch (error) {
-            console.error('Error in fetchDateRange:', error);
-            const fallbackMinDate = new Date(Date.now() - 60 * 1000);
-            const fallbackMaxDate = new Date();
-            const minDateStr = fallbackMinDate.toISOString().slice(0, 16);
-            const maxDateStr = fallbackMaxDate.toISOString().slice(0, 16);
-
-            $("#startTime").attr('min', minDateStr);
-            $("#startTime").attr('max', maxDateStr);
-            $("#endTime").attr('min', minDateStr);
-            $("#endTime").attr('max', maxDateStr);
-
-            if (!$("#startTime").val()) {
-                $("#startTime").val(minDateStr);
-            }
-            if (!$("#endTime").val()) {
-                $("#endTime").val(maxDateStr);
-            }
-        }
-    }
-
     // Initialize date inputs
     $(async function () {
-        await fetchDateRange();
-
         // Fetch logs when date inputs change
         $("#startTime, #endTime").on("change", function () {
             fetchLogs();

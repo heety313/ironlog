@@ -322,16 +322,23 @@ td:last-child {
 }
 
 .ui-slider .ui-slider-handle {
-    width: 10px;      /* Set the desired width to make it slimmer */
-    height: 20px;     /* Adjust the height as needed */
-    margin-top: 0px; /* Center the handle vertically on the slider bar */
-    background-color: #4c6075; /* Optional: Change handle color */
-    border-radius: 2px; /* Optional: Adjust border radius */
-    border: none;    /* Optional: Remove border if desired */
+    width: 10px;
+    /* Set the desired width to make it slimmer */
+    height: 20px;
+    /* Adjust the height as needed */
+    margin-top: 0px;
+    /* Center the handle vertically on the slider bar */
+    background-color: #4c6075;
+    /* Optional: Change handle color */
+    border-radius: 2px;
+    /* Optional: Adjust border radius */
+    border: none;
+    /* Optional: Remove border if desired */
 }
 
 #slider-range .ui-slider-range {
-    background-color: #355f3c; /* Match the handle color or choose a different one */
+    background-color: #355f3c;
+    /* Match the handle color or choose a different one */
 }
 
 /* Dark mode adjustments */
@@ -342,6 +349,7 @@ body.dark-mode #slider-range .ui-slider-handle {
 body.dark-mode #slider-range .ui-slider-range {
     background-color: #24b36b;
 }
+
 /* Log Level Colors */
 .level-label {
     display: inline-block;
@@ -390,7 +398,8 @@ body.dark-mode .level-label.level-DEBUG {
 
 .level-label.level-ERROR::after,
 .level-label.level-DEBUG::after {
-    content: none; /* or content: normal; */
+    content: none;
+    /* or content: normal; */
 }
 
 /* Search Bar Styles */
@@ -438,7 +447,7 @@ body.dark-mode .hash-badge-table {
     border: 1px solid #555555;
 }
 
-/* Dump Logs Button */
+/* Button Styles */
 #dumpButton,
 #copyButton {
     padding: 5px 10px;
@@ -447,7 +456,6 @@ body.dark-mode .hash-badge-table {
     color: #333;
     border: 1px solid #ccc;
     border-radius: 2px;
-    /* Adjusted to make buttons more squared off */
     cursor: pointer;
     margin-right: 10px;
     transition: background-color 0.3s ease;
@@ -468,6 +476,34 @@ body.dark-mode #copyButton {
 body.dark-mode #dumpButton:hover,
 body.dark-mode #copyButton:hover {
     background-color: #505050;
+}
+
+/* Danger Button Styles */
+.danger-button {
+    padding: 5px 10px;
+    font-size: 14px;
+    background-color: #dc3545;
+    color: #ffffff;
+    border: 1px solid #dc3545;
+    border-radius: 2px;
+    cursor: pointer;
+    margin-right: 10px;
+    transition: background-color 0.3s ease;
+}
+
+.danger-button:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
+body.dark-mode .danger-button {
+    background-color: #b02a37;
+    border-color: #b02a37;
+}
+
+body.dark-mode .danger-button:hover {
+    background-color: #96232e;
+    border-color: #96232e;
 }
 
 /* Responsive Design */
@@ -521,6 +557,20 @@ body.dark-mode #copyButton:hover {
     #levels {
         margin-top: 5px;
     }
+
+    /* Stack buttons vertically on mobile */
+    #utilityContainer div {
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    #dumpButton,
+    #copyButton,
+    .danger-button {
+        margin-right: 0;
+        margin-bottom: 5px;
+        width: 100%;
+    }
 }
 
 /* Dark Mode Toggle Switch Styles */
@@ -547,7 +597,6 @@ body.dark-mode #copyButton:hover {
     background-color: #ccc;
     transition: background-color 0.3s;
     border-radius: 4px;
-    /* Adjusted to make it more squared off */
     margin-right: 10px;
 }
 
@@ -561,7 +610,6 @@ body.dark-mode #copyButton:hover {
     background-color: #fff;
     transition: transform 0.3s;
     border-radius: 2px;
-    /* Adjusted to make it more squared off */
 }
 
 .dark-mode-label input:checked+.slider {
@@ -611,8 +659,12 @@ body.dark-mode #utilityContainer {
 
 #timeInputs {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    justify-content: flex-start;
+    align-items: right;
+}
+
+#timeInputs div {
+    margin-right: 15px;
 }
 
 #timeInputs label {
